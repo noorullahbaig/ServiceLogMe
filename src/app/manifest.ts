@@ -1,0 +1,2 @@
+import type {MetadataRoute} from 'next';
+export default function manifest():MetadataRoute.Manifest{return {name:'ServiceLOGME',short_name:'ServiceLOGME',description:'Your field service notes, organized.',start_url:'/field',display:'standalone',background_color:'#f7f8fa',theme_color:'#2856e8',icons:[{src:'/icon-192.png',sizes:'192x192',type:'image/png'},{src:'/icon-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}]};}
