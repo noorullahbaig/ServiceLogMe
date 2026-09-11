@@ -7,3 +7,7 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 .superpowers/
+/dist/
+.vinext/
+.wrangler/
+.next-stale/

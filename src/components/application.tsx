@@ -59,20 +59,26 @@ export default function Application({
     base = field ? "/field" : "",
     relative = field ? path.slice(6) || "/" : path;
   useEffect(() => {
-    if (!localEnabled) return;
     initialization.current ??= (async () => {
-      const [{ LocalWorkspaceRepository }, { createDevelopmentWorkspace }] =
-        await Promise.all([
-          import("@/dev/local-repository"),
-          import("@/dev/fixtures"),
-        ]);
-      repository.current = new LocalWorkspaceRepository(
-        "servicelogme-local-v1",
-        createDevelopmentWorkspace(),
-      );
+      if (localEnabled) {
+        const [{ LocalWorkspaceRepository }, { createDevelopmentWorkspace }] =
+          await Promise.all([
+            import("@/dev/local-repository"),
+            import("@/dev/fixtures"),
+          ]);
+        repository.current = new LocalWorkspaceRepository(
+          "servicelogme-local-v1",
+          createDevelopmentWorkspace(),
+        );
+      } else {
+        const { CloudflareWorkspaceRepository } = await import(
+          "@/lib/cloudflare-repository"
+        );
+        repository.current = new CloudflareWorkspaceRepository();
+      }
       setData(await repository.current.read());
     })();
-    initialization.current.catch((e) => setError(e.message));
+    initialization.current.catch((e) => setError(e instanceof Error ? e.message : "Unable to open workspace"));
   }, [localEnabled]);
   useEffect(() => {
     if (!toast) return;
@@ -129,19 +135,6 @@ export default function Application({
     setToast("Customer saved");
     return saved;
   }
-  if (!localEnabled)
-    return (
-      <div className="connection-screen">
-        <div className="connection-panel">
-          <Brand />
-          <h1>Workspace unavailable</h1>
-          <p>
-            The workspace connection has not been configured. Contact your
-            administrator to connect this installation.
-          </p>
-        </div>
-      </div>
-    );
   if (!data)
     return (
       <div className="connection-screen">

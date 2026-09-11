@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "servicelogme",
+  "compatibility_date": "2026-09-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "cache": {
+    "enabled": true
+  },
+  "vars": {
+    "BOOTSTRAP_ADMIN_EMAIL": "noorullahbaig31@gmail.com",
+    "BOOTSTRAP_ORGANIZATION_NAME": "ServiceLOGME"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "servicelogme-production",
+      "database_id": "a96cca80-f348-4bc8-b066-9f286b620986",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  "env": {
+    "staging": {
+      "name": "servicelogme-staging",
+      "vars": {
+        "BOOTSTRAP_ADMIN_EMAIL": "noorullahbaig31@gmail.com",
+        "BOOTSTRAP_ORGANIZATION_NAME": "ServiceLOGME"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "servicelogme-staging",
+          "database_id": "76d4d052-8435-4509-a257-723dfc8a2039",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "version_metadata": {
+        "binding": "CF_VERSION_METADATA"
+      }
+    }
+  }
+}
