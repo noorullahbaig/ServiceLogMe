@@ -1,17 +1,27 @@
-import { requireAccessIdentity } from "@/server/access";
+import { assertSameOrigin, requireUser } from "@/server/auth";
 import { cloudflareEnv } from "@/server/cloudflare-runtime";
+import { validateMediaUpload } from "@/server/media";
+import { D1MediaStore } from "@/server/media-store";
 
-export async function GET(request: Request) {
+function responseError(code: string, message: string, status: number) {
+  return Response.json({ code, message }, { status });
+}
+
+export async function POST(request: Request) {
   try {
+    assertSameOrigin(request);
     const env = await cloudflareEnv();
-    await requireAccessIdentity(request, env);
-    const key = new URL(request.url).searchParams.get("key");
-    if (!key || !env.FILES) return new Response("File not found", { status: 404 });
-    const object = await env.FILES.get(key);
-    if (!object) return new Response("File not found", { status: 404 });
-    return new Response(object.body as unknown as globalThis.ReadableStream, { headers: { "content-type": object.httpMetadata?.contentType || "application/octet-stream", "cache-control": "private, max-age=300" } });
+    const user = await requireUser(request, env.DB);
+    const contentType = request.headers.get("content-type") || "";
+    const purpose = request.headers.get("x-media-purpose") === "signature" ? "signature" : "photo";
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    validateMediaUpload(contentType, bytes.byteLength, purpose);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const stored = await new D1MediaStore(env.DB).put({ organizationId: user.organizationId, profileId: user.profileId, bytes: buffer, contentType, purpose });
+    return Response.json(stored);
   } catch (error) {
     if (error instanceof Response) return error;
-    return new Response("Unable to read file", { status: 500 });
+    const message = error instanceof Error ? error.message : "Unable to store the image.";
+    return responseError("MEDIA_UPLOAD_FAILED", message, 422);
   }
 }

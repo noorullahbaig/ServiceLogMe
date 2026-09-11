@@ -133,6 +133,17 @@ describe("completion", () => {
     expect(completionErrors({ ...note, signature: null }).join(" ")).toMatch(
       /signature/i,
     ));
+  it("accepts a persisted signature file reference", () =>
+    expect(
+      completionErrors({
+        ...note,
+        signature: {
+          ...note.signature!,
+          image: "/api/files/signature-1",
+          file_id: "signature-1",
+        },
+      }),
+    ).toEqual([]));
   it("rejects missing core service information", () =>
     expect(
       completionErrors({ ...note, job_title: " ", work_performed: "" }),

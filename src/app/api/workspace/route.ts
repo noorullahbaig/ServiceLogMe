@@ -1,4 +1,4 @@
-import { requireAccessIdentity } from "@/server/access";
+import { assertSameOrigin, requireUser } from "@/server/auth";
 import { cloudflareEnv } from "@/server/cloudflare-runtime";
 import { createNote, readWorkspace, saveCustomer, saveEmployee, saveNote, saveOrganization } from "@/server/d1-repository";
 import type { Customer, Organization, Profile, ServiceNote } from "@/lib/types";
@@ -17,8 +17,8 @@ function required<T>(value: T | undefined, name: string): T {
 export async function GET(request: Request) {
   try {
     const env = await cloudflareEnv();
-    const identity = await requireAccessIdentity(request, env);
-    return Response.json(await readWorkspace(identity));
+    const user = await requireUser(request, env.DB);
+    return Response.json(await readWorkspace(user, env));
   } catch (error) {
     return failure(error);
   }
@@ -27,7 +27,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const env = await cloudflareEnv();
-    const identity = await requireAccessIdentity(request, env);
+    assertSameOrigin(request);
+    const user = await requireUser(request, env.DB);
     const body = await request.json() as {
       action: string;
       note?: ServiceNote;
@@ -37,11 +38,11 @@ export async function POST(request: Request) {
       organization?: Organization;
     };
     switch (body.action) {
-      case "create-note": return Response.json(await createNote(identity));
-      case "save-note": return Response.json(await saveNote(identity, required(body.note, "note"), Boolean(body.complete)));
-      case "save-customer": return Response.json(await saveCustomer(identity, required(body.customer, "customer")));
-      case "save-employee": await saveEmployee(identity, required(body.employee, "employee")); return Response.json({ ok: true });
-      case "save-organization": await saveOrganization(identity, required(body.organization, "organization")); return Response.json({ ok: true });
+      case "create-note": return Response.json(await createNote(user, env));
+      case "save-note": return Response.json(await saveNote(user, required(body.note, "note"), Boolean(body.complete), env));
+      case "save-customer": return Response.json(await saveCustomer(user, required(body.customer, "customer"), env));
+      case "save-employee": await saveEmployee(user, required(body.employee, "employee"), env); return Response.json({ ok: true });
+      case "save-organization": await saveOrganization(user, required(body.organization, "organization"), env); return Response.json({ ok: true });
       default: return Response.json({ message: "Unknown workspace action" }, { status: 400 });
     }
   } catch (error) {

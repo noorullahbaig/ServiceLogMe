@@ -58,6 +58,7 @@ export type PhotoCategory =
   "BEFORE" | "SERVICE" | "MATERIAL" | "AFTER" | "OTHER";
 export interface Photo {
   id: string;
+  file_id?: string;
   url: string;
   category: PhotoCategory;
   caption: string;
@@ -65,10 +66,17 @@ export interface Photo {
   name: string;
 }
 export interface Signature {
+  file_id?: string;
   signer_name: string;
   signer_position: string;
   image: string;
   signed_at: string;
+}
+export interface StoredMediaRef {
+  id: string;
+  url: string;
+  contentType: string;
+  byteSize: number;
 }
 export interface Totals {
   labor_total: string;

@@ -99,7 +99,7 @@ function validCalendarDate(value: string) {
 export function isValidSignature(n: Pick<ServiceNote, "signature">) {
   return Boolean(
     n.signature?.signer_name?.trim() &&
-    n.signature.image?.startsWith("data:image/png;base64,"),
+    (n.signature.file_id || n.signature.image?.startsWith("data:image/png;base64,")),
   );
 }
 export function completionReadiness(n: ServiceNote): CompletionReadiness {
@@ -145,7 +145,7 @@ export function completionReadiness(n: ServiceNote): CompletionReadiness {
     payment.push("Select a valid payment method.");
   if (!n.signature?.signer_name?.trim())
     acceptance.push("Signer name is required.");
-  if (!n.signature?.image?.startsWith("data:image/png;base64,"))
+  if (!n.signature?.file_id && !n.signature?.image?.startsWith("data:image/png;base64,"))
     acceptance.push(
       "Customer signature is required before completing this Service Note.",
     );

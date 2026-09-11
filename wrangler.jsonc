@@ -14,9 +14,9 @@
   "cache": {
     "enabled": true
   },
-  "vars": {
-    "BOOTSTRAP_ADMIN_EMAIL": "noorullahbaig31@gmail.com",
-    "BOOTSTRAP_ORGANIZATION_NAME": "ServiceLOGME"
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
   },
   "d1_databases": [
     {
@@ -32,10 +32,6 @@
   "env": {
     "staging": {
       "name": "servicelogme-staging",
-      "vars": {
-        "BOOTSTRAP_ADMIN_EMAIL": "noorullahbaig31@gmail.com",
-        "BOOTSTRAP_ORGANIZATION_NAME": "ServiceLOGME"
-      },
       "d1_databases": [
         {
           "binding": "DB",

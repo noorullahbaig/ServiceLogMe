@@ -593,14 +593,7 @@ export default function NoteEditor({
       const url = await new Promise<string>((resolve, reject) => {
         const image = new Image();
         image.onload = () => {
-          if (
-            upload.file.type !== "image/webp" &&
-            Math.max(image.width, image.height) <= 1800
-          ) {
-            resolve(data);
-            return;
-          }
-          const factor = 1800 / Math.max(image.width, image.height);
+          const factor = Math.min(1, 1600 / Math.max(image.width, image.height));
           const canvas = document.createElement("canvas");
           canvas.width = Math.round(image.width * factor);
           canvas.height = Math.round(image.height * factor);
@@ -612,7 +605,15 @@ export default function NoteEditor({
               ),
             );
           ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", 0.85));
+          let quality = 0.82;
+          let compressed = canvas.toDataURL("image/jpeg", quality);
+          while (compressed.length > 470_000 && quality > 0.45) {
+            quality -= 0.08;
+            compressed = canvas.toDataURL("image/jpeg", quality);
+          }
+          if (compressed.length > 470_000)
+            return reject(new Error("This image is too large after compression."));
+          resolve(compressed);
         };
         image.onerror = () =>
           reject(

@@ -117,7 +117,7 @@ function CustomerEditor({
 
   useEffect(() => {
     if (!open) return;
-    // The dialog receives a different record while it remains mounted; reset
+    // The dialog receives a different record while it remains mounted; clear
     // its editable copy only when that record is opened.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(customer ? {
