@@ -72,6 +72,17 @@ export interface Signature {
   image: string;
   signed_at: string;
 }
+export type RecordType = "RECEIPT" | "INSPECTION" | "SERVICE" | "HANDOVER";
+export type FinalizationType = "STAFF_ATTESTED" | "CUSTOMER_ACKNOWLEDGED";
+export interface TrackedItem {
+  id: string;
+  organization_id: string;
+  name: string;
+  reference: string;
+  customer_id?: string;
+  created_at: string;
+  updated_at: string;
+}
 export interface StoredMediaRef {
   id: string;
   url: string;
@@ -94,6 +105,14 @@ export interface ServiceNote extends Totals {
   service_number: string;
   status: "DRAFT" | "COMPLETED";
   revision: number;
+  record_type?: RecordType;
+  tracked_item_id?: string;
+  item_name_snapshot?: string;
+  item_reference_snapshot?: string;
+  location_snapshot?: string;
+  billing_enabled?: boolean;
+  finalization_type?: FinalizationType;
+  staff_attested_at?: string;
   job_title: string;
   job_description: string;
   work_performed: string;
@@ -143,6 +162,7 @@ export interface WorkspaceData {
   profile: Profile;
   employees: Profile[];
   customers: Customer[];
+  tracked_items?: TrackedItem[];
   notes: ServiceNote[];
   events: AuditEvent[];
 }

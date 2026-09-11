@@ -94,6 +94,7 @@ function setup(
       status: "COMPLETED" as const,
     })),
     onCreateCustomer: vi.fn(),
+    onCreateTrackedItem: vi.fn(),
     onDone: vi.fn(),
     ...overrides,
   };
@@ -103,7 +104,7 @@ function setup(
 describe("service note editing", () => {
   it("autosaves a changed draft after a short quiet period", async () => {
     const props = setup();
-    fireEvent.change(screen.getByLabelText(/Job title/), {
+    fireEvent.change(screen.getByLabelText(/Record title/), {
       target: { value: "Autosaved regulator service" },
     });
     expect(screen.getByRole("status").textContent).toContain("Unsaved changes");
@@ -121,7 +122,7 @@ describe("service note editing", () => {
   });
   it("invalidates acceptance after a service change and saves the changed draft", async () => {
     const props = setup();
-    fireEvent.change(screen.getByLabelText(/Job title/), {
+    fireEvent.change(screen.getByLabelText(/Record title/), {
       target: { value: "Regulator replacement" },
     });
     expect(screen.queryByAltText("Confirmed customer signature")).toBeNull();
@@ -138,14 +139,22 @@ describe("service note editing", () => {
         throw new Error("Storage unavailable. Try again.");
       }),
     });
-    fireEvent.change(screen.getByLabelText(/Job title/), {
+    fireEvent.change(screen.getByLabelText(/Record title/), {
       target: { value: "Keep this edited title" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: /Save draft/i })[0]);
     await screen.findByText("Storage unavailable. Try again.");
-    expect((screen.getByLabelText(/Job title/) as HTMLInputElement).value).toBe(
+    expect((screen.getByLabelText(/Record title/) as HTMLInputElement).value).toBe(
       "Keep this edited title",
     );
+  });
+  it("uses staff attestation and removes billing for an internal inspection", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText(/Record type/), {
+      target: { value: "INSPECTION" },
+    });
+    expect(screen.getAllByText("Staff attestation")).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "Payment" })).toBeNull();
   });
   it("cancels labor without adding it, then saves a real line and total", async () => {
     const props = setup();
@@ -193,7 +202,7 @@ describe("service note editing", () => {
   });
   it("blocks customer handoff until the technician requirements are complete", () => {
     setup({ field: true, note: { ...note, customer_id: "", signature: null } });
-    fireEvent.click(screen.getByRole("button", { name: "Go to Sign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to Review" }));
     expect(screen.getByRole("heading", { name: "Customer" })).toBeTruthy();
     expect(
       screen.getByText(
@@ -204,7 +213,7 @@ describe("service note editing", () => {
   });
   it("shows missing requirements and disables completion until acceptance is confirmed", () => {
     setup({ field: true, note: { ...note, signature: null } });
-    fireEvent.click(screen.getByRole("button", { name: "Go to Sign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to Review" }));
     expect(screen.getByText("Customer acceptance")).toBeTruthy();
     expect(screen.getByText(/Signature required/)).toBeTruthy();
     expect(
@@ -217,7 +226,7 @@ describe("service note editing", () => {
   });
   it("removes field navigation during customer acceptance and restores it on back", () => {
     setup({ field: true });
-    fireEvent.click(screen.getByRole("button", { name: "Go to Sign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to Review" }));
     expect(document.body.classList.contains("customer-signing")).toBe(true);
     expect(screen.getByText("Customer acceptance")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));

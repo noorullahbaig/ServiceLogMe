@@ -102,6 +102,29 @@ export function isValidSignature(n: Pick<ServiceNote, "signature">) {
     (n.signature.file_id || n.signature.image?.startsWith("data:image/png;base64,")),
   );
 }
+export function requiresCustomerAcknowledgement(
+  n: Pick<ServiceNote, "finalization_type">,
+) {
+  return n.finalization_type !== "STAFF_ATTESTED";
+}
+export function searchableNoteText(n: Pick<ServiceNote, "service_number" | "item_name_snapshot" | "item_reference_snapshot" | "job_title" | "job_description" | "work_performed" | "result_remarks" | "additional_notes" | "customer_name_snapshot" | "person_in_charge_name_snapshot" | "photos">) {
+  return [
+    n.service_number,
+    n.item_name_snapshot,
+    n.item_reference_snapshot,
+    n.customer_name_snapshot,
+    n.person_in_charge_name_snapshot,
+    n.job_title,
+    n.job_description,
+    n.work_performed,
+    n.result_remarks,
+    n.additional_notes,
+    ...n.photos.flatMap((photo) => [photo.caption, photo.name]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 export function completionReadiness(n: ServiceNote): CompletionReadiness {
   const service: string[] = [],
     customer: string[] = [],
@@ -122,9 +145,13 @@ export function completionReadiness(n: ServiceNote): CompletionReadiness {
     service.push(
       "Person in charge is required before completing this Service Note.",
     );
-  if (!n.customer_id?.trim())
+  const customerAcknowledgement = requiresCustomerAcknowledgement(n);
+  if (customerAcknowledgement && !n.customer_id?.trim())
     customer.push("Customer is required before completing this Service Note.");
-  if (!(n.contact_mobile_snapshot || n.contact_office_snapshot)?.trim())
+  if (
+    customerAcknowledgement &&
+    !(n.contact_mobile_snapshot || n.contact_office_snapshot)?.trim()
+  )
     customer.push(
       "Contact number is required before completing this Service Note.",
     );
@@ -132,20 +159,26 @@ export function completionReadiness(n: ServiceNote): CompletionReadiness {
     work.push(
       "Work performed is required before completing this Service Note.",
     );
-  if (!["PAID", "UNPAID"].includes(n.payment_status))
+  const billingEnabled = n.billing_enabled !== false;
+  if (billingEnabled && !["PAID", "UNPAID"].includes(n.payment_status))
     payment.push(
       "Payment status is required before completing this Service Note.",
     );
-  if (n.payment_status === "PAID" && !n.payment_method?.trim())
+  if (billingEnabled && n.payment_status === "PAID" && !n.payment_method?.trim())
     payment.push("Payment method is required when payment status is Paid.");
   else if (
+    billingEnabled &&
     n.payment_status === "PAID" &&
     !paymentMethods.includes(n.payment_method)
   )
     payment.push("Select a valid payment method.");
-  if (!n.signature?.signer_name?.trim())
+  if (customerAcknowledgement && !n.signature?.signer_name?.trim())
     acceptance.push("Signer name is required.");
-  if (!n.signature?.file_id && !n.signature?.image?.startsWith("data:image/png;base64,"))
+  if (
+    customerAcknowledgement &&
+    !n.signature?.file_id &&
+    !n.signature?.image?.startsWith("data:image/png;base64,")
+  )
     acceptance.push(
       "Customer signature is required before completing this Service Note.",
     );
@@ -194,7 +227,8 @@ export function completionErrors(n: ServiceNote) {
   return completionReadiness(n).errors;
 }
 export function isCompletedRecord(n: ServiceNote) {
-  return n.status === "COMPLETED" && isValidSignature(n);
+  return n.status === "COMPLETED" &&
+    (n.finalization_type === "STAFF_ATTESTED" || isValidSignature(n));
 }
 export function canAccessNote(p: Profile, n: ServiceNote) {
   return (

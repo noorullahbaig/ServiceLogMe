@@ -1,5 +1,5 @@
 import { calculateTotals, canAccessNote, completionErrors } from "@/lib/domain";
-import type { AuditEvent, Charge, Customer, Labor, Material, Organization, Profile, ServiceNote, Signature, WorkspaceData } from "@/lib/types";
+import type { AuditEvent, Charge, Customer, Labor, Material, Organization, Profile, ServiceNote, Signature, TrackedItem, WorkspaceData } from "@/lib/types";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { AuthenticatedUser } from "./auth";
 import { validateMediaUpload } from "./media";
@@ -18,6 +18,9 @@ function organizationFromRow(row: Row): Organization {
 }
 function customerFromRow(row: Row): Customer {
   return { id: text(row.id), organization_id: text(row.organization_id), name: text(row.name), contact_name: text(row.contact_name), contact_position: text(row.contact_position), mobile: text(row.mobile), office: text(row.office), email: text(row.email), address: text(row.address), notes: text(row.notes), created_at: text(row.created_at) };
+}
+function trackedItemFromRow(row: Row): TrackedItem {
+  return { id: text(row.id), organization_id: text(row.organization_id), customer_id: text(row.customer_id) || undefined, name: text(row.name), reference: text(row.reference), created_at: text(row.created_at), updated_at: text(row.updated_at) };
 }
 function signatureFromRow(row: Row | undefined): Signature | null {
   if (!row) return null;
@@ -53,18 +56,19 @@ async function childRows(noteId: string, organizationId: string, db: D1Database)
 }
 async function noteFromRow(row: Row, db: D1Database): Promise<ServiceNote> {
   const children = await childRows(text(row.id), text(row.organization_id), db);
-  return { id: text(row.id), organization_id: text(row.organization_id), service_number: text(row.service_number), status: text(row.status) as ServiceNote["status"], revision: num(row.revision), job_title: text(row.job_title), job_description: text(row.job_description), work_performed: text(row.work_performed), result_remarks: text(row.result_remarks), additional_notes: text(row.additional_notes), service_date: text(row.service_date), service_time: text(row.service_time), person_in_charge_id: text(row.person_in_charge_id), person_in_charge_name_snapshot: text(row.person_in_charge_name_snapshot), person_in_charge_job_title_snapshot: text(row.person_in_charge_job_title_snapshot), person_in_charge_employee_id_snapshot: text(row.person_in_charge_employee_id_snapshot), customer_id: text(row.customer_id), customer_name_snapshot: text(row.customer_name_snapshot), contact_name_snapshot: text(row.contact_name_snapshot), contact_position_snapshot: text(row.contact_position_snapshot), contact_mobile_snapshot: text(row.contact_mobile_snapshot), contact_office_snapshot: text(row.contact_office_snapshot), contact_email_snapshot: text(row.contact_email_snapshot), customer_address_snapshot: text(row.customer_address_snapshot), payment_status: text(row.payment_status) as ServiceNote["payment_status"], payment_method: text(row.payment_method), payment_terms: text(row.payment_terms), payment_reference: text(row.payment_reference), payment_remarks: text(row.payment_remarks), labor_total: text(row.labor_total), material_total: text(row.material_total), additional_charge_total: text(row.additional_charge_total), subtotal: text(row.subtotal), discount_amount: text(row.discount_amount), tax_rate: text(row.tax_rate), tax_amount: text(row.tax_amount), grand_total: text(row.grand_total), labor: children.labor, materials: children.materials, charges: children.charges, photos: children.photos, signer_name_draft: text(row.signer_name_draft) || undefined, signer_position_draft: text(row.signer_position_draft) || undefined, signature: children.signature, created_at: text(row.created_at), updated_at: text(row.updated_at), completed_at: text(row.completed_at) || null };
+  return { id: text(row.id), organization_id: text(row.organization_id), service_number: text(row.service_number), status: text(row.status) as ServiceNote["status"], revision: num(row.revision), record_type: text(row.record_type) as ServiceNote["record_type"], tracked_item_id: text(row.tracked_item_id) || undefined, item_name_snapshot: text(row.item_name_snapshot), item_reference_snapshot: text(row.item_reference_snapshot), location_snapshot: text(row.location_snapshot), billing_enabled: Boolean(num(row.billing_enabled)), finalization_type: text(row.finalization_type) as ServiceNote["finalization_type"], staff_attested_at: text(row.staff_attested_at) || undefined, job_title: text(row.job_title), job_description: text(row.job_description), work_performed: text(row.work_performed), result_remarks: text(row.result_remarks), additional_notes: text(row.additional_notes), service_date: text(row.service_date), service_time: text(row.service_time), person_in_charge_id: text(row.person_in_charge_id), person_in_charge_name_snapshot: text(row.person_in_charge_name_snapshot), person_in_charge_job_title_snapshot: text(row.person_in_charge_job_title_snapshot), person_in_charge_employee_id_snapshot: text(row.person_in_charge_employee_id_snapshot), customer_id: text(row.customer_id), customer_name_snapshot: text(row.customer_name_snapshot), contact_name_snapshot: text(row.contact_name_snapshot), contact_position_snapshot: text(row.contact_position_snapshot), contact_mobile_snapshot: text(row.contact_mobile_snapshot), contact_office_snapshot: text(row.contact_office_snapshot), contact_email_snapshot: text(row.contact_email_snapshot), customer_address_snapshot: text(row.customer_address_snapshot), payment_status: text(row.payment_status) as ServiceNote["payment_status"], payment_method: text(row.payment_method), payment_terms: text(row.payment_terms), payment_reference: text(row.payment_reference), payment_remarks: text(row.payment_remarks), labor_total: text(row.labor_total), material_total: text(row.material_total), additional_charge_total: text(row.additional_charge_total), subtotal: text(row.subtotal), discount_amount: text(row.discount_amount), tax_rate: text(row.tax_rate), tax_amount: text(row.tax_amount), grand_total: text(row.grand_total), labor: children.labor, materials: children.materials, charges: children.charges, photos: children.photos, signer_name_draft: text(row.signer_name_draft) || undefined, signer_position_draft: text(row.signer_position_draft) || undefined, signature: children.signature, created_at: text(row.created_at), updated_at: text(row.updated_at), completed_at: text(row.completed_at) || null };
 }
 async function rowsForWorkspace(profile: Profile, db: D1Database) {
-  const [organization, employees, customers, notes, events] = await Promise.all([
+  const [organization, employees, customers, trackedItems, noteRows, events] = await Promise.all([
     one(db, "SELECT * FROM organizations WHERE id = ?", profile.organization_id),
     all(db, "SELECT * FROM profiles WHERE organization_id = ? ORDER BY full_name", profile.organization_id),
     all(db, "SELECT * FROM customers WHERE organization_id = ? ORDER BY name", profile.organization_id),
-    all(db, "SELECT * FROM service_notes WHERE organization_id = ? ORDER BY updated_at DESC", profile.organization_id),
-    all(db, "SELECT * FROM audit_events WHERE organization_id = ? ORDER BY created_at DESC", profile.organization_id),
+    all(db, "SELECT * FROM tracked_items WHERE organization_id = ? ORDER BY reference", profile.organization_id),
+    all(db, `SELECT * FROM service_notes WHERE organization_id = ? ${profile.role === "ADMIN" ? "" : "AND person_in_charge_id = ?"} ORDER BY updated_at DESC`, ...(profile.role === "ADMIN" ? [profile.organization_id] : [profile.organization_id, profile.id])),
+    all(db, `SELECT * FROM audit_events WHERE organization_id = ? ${profile.role === "ADMIN" ? "" : "AND note_id IN (SELECT id FROM service_notes WHERE organization_id = ? AND person_in_charge_id = ?)"} ORDER BY created_at DESC`, ...(profile.role === "ADMIN" ? [profile.organization_id] : [profile.organization_id, profile.organization_id, profile.id])),
   ]);
   if (!organization) throw new Error("Organization not found");
-  return { organization: organizationFromRow(organization), employees: employees.map(profileFromRow), customers: customers.map(customerFromRow), notes: await Promise.all(notes.map((row) => noteFromRow(row, db))), events: events.map((r) => ({ id: text(r.id), note_id: text(r.note_id), service_number: text(r.service_number), actor_name: text(r.actor_name), type: text(r.type) as AuditEvent["type"], created_at: text(r.created_at) })) };
+  return { organization: organizationFromRow(organization), employees: employees.map(profileFromRow), customers: customers.map(customerFromRow), tracked_items: trackedItems.map(trackedItemFromRow), notes: await Promise.all(noteRows.map((row) => noteFromRow(row, db))), events: events.map((r) => ({ id: text(r.id), note_id: text(r.note_id), service_number: text(r.service_number), actor_name: text(r.actor_name), type: text(r.type) as AuditEvent["type"], created_at: text(r.created_at) })) };
 }
 export async function readWorkspace(user: AuthenticatedUser, env: Cloudflare.Env): Promise<WorkspaceData> {
   const profile = await profileForUser(user, env.DB);
@@ -145,15 +149,19 @@ export async function saveNote(user: AuthenticatedUser, input: ServiceNote, comp
   if (current.revision !== input.revision) throw new Response(JSON.stringify({ code: "REVISION_CONFLICT", message: "This Service Note changed in another tab. Reload the saved record before editing again.", currentRevision: current.revision }), { status: 409, headers: { "content-type": "application/json" } });
   const customer = input.customer_id ? await one(env.DB, "SELECT * FROM customers WHERE id = ? AND organization_id = ?", input.customer_id, profile.organization_id) : undefined;
   if (input.customer_id && !customer) throw new Response(JSON.stringify({ code: "CUSTOMER_NOT_FOUND", message: "Select a customer in this organization." }), { status: 422, headers: { "content-type": "application/json" } });
+  const trackedItem = input.tracked_item_id ? await one(env.DB, "SELECT * FROM tracked_items WHERE id = ? AND organization_id = ?", input.tracked_item_id, profile.organization_id) : undefined;
+  if (input.tracked_item_id && !trackedItem) throw new Response(JSON.stringify({ code: "ITEM_NOT_FOUND", message: "Select an item in this organization." }), { status: 422, headers: { "content-type": "application/json" } });
   const updated = { ...input, ...calculateTotals(input), organization_id: profile.organization_id, status: complete ? "COMPLETED" as const : "DRAFT" as const, revision: current.revision + 1, updated_at: now(), completed_at: complete ? now() : null };
-  Object.assign(updated, customer ? { customer_name_snapshot: text(customer.name), contact_name_snapshot: text(customer.contact_name), contact_position_snapshot: text(customer.contact_position), contact_mobile_snapshot: text(customer.mobile), contact_office_snapshot: text(customer.office), contact_email_snapshot: text(customer.email), customer_address_snapshot: text(customer.address) } : { customer_name_snapshot: "", contact_name_snapshot: "", contact_position_snapshot: "", contact_mobile_snapshot: "", contact_office_snapshot: "", contact_email_snapshot: "", customer_address_snapshot: "" });
+  if (trackedItem) Object.assign(updated, { item_name_snapshot: text(trackedItem.name), item_reference_snapshot: text(trackedItem.reference) });
+  if (!customer) Object.assign(updated, { customer_name_snapshot: "", contact_name_snapshot: "", contact_position_snapshot: "", contact_mobile_snapshot: "", contact_office_snapshot: "", contact_email_snapshot: "", customer_address_snapshot: "" });
   if (complete) {
     const errors = completionErrors(updated);
     if (errors.length) throw new Response(JSON.stringify({ code: "VALIDATION_FAILED", message: errors.join("\n"), errors }), { status: 422, headers: { "content-type": "application/json" } });
-    if (updated.signature) updated.signature.signed_at = updated.updated_at;
+    if (updated.finalization_type === "STAFF_ATTESTED") updated.staff_attested_at = updated.updated_at;
+    else if (updated.signature) updated.signature.signed_at = updated.updated_at;
   }
   const eventType = complete ? "SERVICE_NOTE_COMPLETED" : "SERVICE_NOTE_UPDATED";
-  const statements = [env.DB.prepare("UPDATE service_notes SET status = ?, revision = ?, job_title = ?, job_description = ?, work_performed = ?, result_remarks = ?, additional_notes = ?, service_date = ?, service_time = ?, customer_id = ?, customer_name_snapshot = ?, contact_name_snapshot = ?, contact_position_snapshot = ?, contact_mobile_snapshot = ?, contact_office_snapshot = ?, contact_email_snapshot = ?, customer_address_snapshot = ?, payment_status = ?, payment_method = ?, payment_terms = ?, payment_reference = ?, payment_remarks = ?, labor_total = ?, material_total = ?, additional_charge_total = ?, subtotal = ?, discount_amount = ?, tax_rate = ?, tax_amount = ?, grand_total = ?, signer_name_draft = ?, signer_position_draft = ?, updated_at = ?, completed_at = ? WHERE id = ? AND organization_id = ?").bind(updated.status, updated.revision, updated.job_title, updated.job_description, updated.work_performed, updated.result_remarks, updated.additional_notes, updated.service_date, updated.service_time, updated.customer_id || null, updated.customer_name_snapshot, updated.contact_name_snapshot, updated.contact_position_snapshot, updated.contact_mobile_snapshot, updated.contact_office_snapshot, updated.contact_email_snapshot, updated.customer_address_snapshot, updated.payment_status, updated.payment_method, updated.payment_terms, updated.payment_reference, updated.payment_remarks, updated.labor_total, updated.material_total, updated.additional_charge_total, updated.subtotal, updated.discount_amount, updated.tax_rate, updated.tax_amount, updated.grand_total, updated.signer_name_draft || null, updated.signer_position_draft || null, updated.updated_at, updated.completed_at, updated.id, profile.organization_id)];
+  const statements = [env.DB.prepare("UPDATE service_notes SET status = ?, revision = ?, record_type = ?, tracked_item_id = ?, item_name_snapshot = ?, item_reference_snapshot = ?, location_snapshot = ?, billing_enabled = ?, finalization_type = ?, staff_attested_at = ?, job_title = ?, job_description = ?, work_performed = ?, result_remarks = ?, additional_notes = ?, service_date = ?, service_time = ?, customer_id = ?, customer_name_snapshot = ?, contact_name_snapshot = ?, contact_position_snapshot = ?, contact_mobile_snapshot = ?, contact_office_snapshot = ?, contact_email_snapshot = ?, customer_address_snapshot = ?, payment_status = ?, payment_method = ?, payment_terms = ?, payment_reference = ?, payment_remarks = ?, labor_total = ?, material_total = ?, additional_charge_total = ?, subtotal = ?, discount_amount = ?, tax_rate = ?, tax_amount = ?, grand_total = ?, signer_name_draft = ?, signer_position_draft = ?, updated_at = ?, completed_at = ? WHERE id = ? AND organization_id = ?").bind(updated.status, updated.revision, updated.record_type || "SERVICE", updated.tracked_item_id || null, updated.item_name_snapshot || "", updated.item_reference_snapshot || "", updated.location_snapshot || "", updated.billing_enabled === false ? 0 : 1, updated.finalization_type || "CUSTOMER_ACKNOWLEDGED", updated.staff_attested_at || null, updated.job_title, updated.job_description, updated.work_performed, updated.result_remarks, updated.additional_notes, updated.service_date, updated.service_time, updated.customer_id || null, updated.customer_name_snapshot, updated.contact_name_snapshot, updated.contact_position_snapshot, updated.contact_mobile_snapshot, updated.contact_office_snapshot, updated.contact_email_snapshot, updated.customer_address_snapshot, updated.payment_status, updated.payment_method, updated.payment_terms, updated.payment_reference, updated.payment_remarks, updated.labor_total, updated.material_total, updated.additional_charge_total, updated.subtotal, updated.discount_amount, updated.tax_rate, updated.tax_amount, updated.grand_total, updated.signer_name_draft || null, updated.signer_position_draft || null, updated.updated_at, updated.completed_at, updated.id, profile.organization_id)];
   statements.push(...await replaceChildren(updated, profile, user, env));
   statements.push(env.DB.prepare("INSERT INTO audit_events (id, organization_id, note_id, service_number, actor_name, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id(), profile.organization_id, updated.id, updated.service_number, profile.full_name, eventType, updated.updated_at));
   await env.DB.batch(statements);
@@ -171,6 +179,30 @@ export async function saveCustomer(user: AuthenticatedUser, input: Omit<Customer
   const row = await one(env.DB, "SELECT * FROM customers WHERE id = ? AND organization_id = ?", customerId, profile.organization_id);
   if (!row) throw new Error("Could not save customer");
   return customerFromRow(row);
+}
+export async function saveTrackedItem(
+  user: AuthenticatedUser,
+  input: Omit<TrackedItem, "id" | "organization_id" | "created_at" | "updated_at"> & { id?: string },
+  env: Cloudflare.Env,
+): Promise<TrackedItem> {
+  const profile = await profileForUser(user, env.DB);
+  const name = input.name.trim(), reference = input.reference.trim();
+  if (!name || !reference)
+    throw new Response(JSON.stringify({ code: "VALIDATION_FAILED", message: "Item name and reference are required." }), { status: 422, headers: { "content-type": "application/json" } });
+  const existing = input.id ? await one(env.DB, "SELECT * FROM tracked_items WHERE id = ? AND organization_id = ?", input.id, profile.organization_id) : undefined;
+  if (input.id && !existing)
+    throw new Response(JSON.stringify({ code: "ITEM_NOT_FOUND", message: "Item not found." }), { status: 404, headers: { "content-type": "application/json" } });
+  const itemId = text(existing?.id) || id(), timestamp = now();
+  try {
+    await env.DB.prepare("INSERT INTO tracked_items (id, organization_id, customer_id, name, reference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id = excluded.customer_id, name = excluded.name, reference = excluded.reference, updated_at = excluded.updated_at").bind(itemId, profile.organization_id, input.customer_id || null, name, reference, text(existing?.created_at) || timestamp, timestamp).run();
+  } catch (cause) {
+    if (cause instanceof Error && /unique/i.test(cause.message))
+      throw new Response(JSON.stringify({ code: "ITEM_REFERENCE_EXISTS", message: "An item with this reference already exists." }), { status: 409, headers: { "content-type": "application/json" } });
+    throw cause;
+  }
+  const row = await one(env.DB, "SELECT * FROM tracked_items WHERE id = ? AND organization_id = ?", itemId, profile.organization_id);
+  if (!row) throw new Error("Could not save item");
+  return trackedItemFromRow(row);
 }
 export async function saveEmployee(user: AuthenticatedUser, input: Profile, env: Cloudflare.Env) {
   const profile = await profileForUser(user, env.DB);

@@ -47,6 +47,7 @@ import type {
   Charge,
   Photo,
   PhotoCategory,
+  TrackedItem,
 } from "@/lib/types";
 import { paymentMethods, paymentTerms } from "@/lib/types";
 import { SignaturePad } from "./signature-pad";
@@ -57,10 +58,12 @@ type Props = {
   note: ServiceNote;
   customers: Customer[];
   employees: Profile[];
+  trackedItems?: TrackedItem[];
   field?: boolean;
   onSave: (note: ServiceNote) => Promise<ServiceNote>;
   onComplete: (note: ServiceNote) => Promise<ServiceNote>;
   onCreateCustomer: (customer: NewCustomer) => Promise<Customer>;
+  onCreateTrackedItem: (item: Omit<TrackedItem, "id" | "organization_id" | "created_at" | "updated_at">) => Promise<TrackedItem>;
   onDone: (note: ServiceNote) => void;
 };
 type ItemDialog =
@@ -76,7 +79,7 @@ const steps = [
   "Labor & materials",
   "Photos",
   "Payment",
-  "Sign",
+  "Review",
 ];
 const emptyCustomer: NewCustomer = {
   name: "",
@@ -175,10 +178,12 @@ export default function NoteEditor({
   note,
   customers,
   employees,
+  trackedItems = [],
   field = false,
   onSave,
   onComplete,
   onCreateCustomer,
+  onCreateTrackedItem,
   onDone,
 }: Props) {
   const [draft, setDraft] = useState(note);
@@ -197,6 +202,7 @@ export default function NoteEditor({
   const [itemDialog, setItemDialog] = useState<ItemDialog | null>(null);
   const [dialogError, setDialogError] = useState("");
   const [customerDialog, setCustomerDialog] = useState(false);
+  const [itemBusy, setItemBusy] = useState(false);
   const [newCustomer, setNewCustomer] = useState<NewCustomer>(emptyCustomer);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [extraCustomers, setExtraCustomers] = useState<Customer[]>([]);
@@ -386,6 +392,7 @@ export default function NoteEditor({
     () => completionReadiness({ ...draft, ...(total || {}) }),
     [draft, total],
   );
+  const customerAcknowledgement = draft.finalization_type !== "STAFF_ATTESTED";
   async function save(complete = false) {
     setError("");
     if (calculated.error) {
@@ -462,6 +469,11 @@ export default function NoteEditor({
     ok: item.complete,
     fieldId: item.fieldId,
   }));
+  const hasBilling = draft.billing_enabled !== false;
+  const fieldSteps = hasBilling ? steps : steps.filter((_, index) => index !== 5);
+  const visibleStepNumber = fieldSteps.indexOf(steps[step]) + 1;
+  const previousFieldStep = !hasBilling && step === 6 ? 4 : step - 1;
+  const nextFieldStep = !hasBilling && step === 4 ? 6 : step + 1;
   function openItem(
     kind: ItemDialog["kind"],
     existing?: Labor | Material | Charge,
@@ -568,6 +580,32 @@ export default function NoteEditor({
       );
     } finally {
       setCustomerBusy(false);
+    }
+  }
+  async function saveTrackedItem() {
+    const name = draft.item_name_snapshot?.trim() || "";
+    const reference = draft.item_reference_snapshot?.trim() || "";
+    if (!name || !reference) {
+      setError("Enter an item name and reference before saving it for later.");
+      return;
+    }
+    setItemBusy(true);
+    try {
+      const item = await onCreateTrackedItem({
+        name,
+        reference,
+        customer_id: draft.customer_id || undefined,
+      });
+      patch({
+        tracked_item_id: item.id,
+        item_name_snapshot: item.name,
+        item_reference_snapshot: item.reference,
+      });
+      setSaveState("Item saved for future records");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The item could not be saved.");
+    } finally {
+      setItemBusy(false);
     }
   }
   async function processUpload(upload: Upload) {
@@ -755,7 +793,7 @@ export default function NoteEditor({
               </div>
               <p className="muted">
                 {field
-                  ? "Record your visit, from first details to customer sign-off."
+                  ? "Capture a clear, complete record for the item."
                   : "Capture the work. Keep every detail in one place."}
               </p>
             </div>
@@ -777,23 +815,37 @@ export default function NoteEditor({
       )}
       {field && step !== 6 && (
         <div className="field-step-header">
-          <div>
-            <span>STEP {step + 1} OF 7</span>
-            <strong>{steps[step]}</strong>
+          <div className="field-step-meta">
+            <span className="field-step-counter">
+              Step {visibleStepNumber} of {fieldSteps.length}
+            </span>
+            <strong className="field-step-title">{steps[step]}</strong>
           </div>
-          <div className="field-step-track">
-            {steps.map((name, index) => (
-              <button
-                type="button"
-                key={name}
-                className={
-                  index === step ? "current" : index < step ? "done" : ""
-                }
-                aria-label={`Go to ${name}`}
-                aria-current={index === step ? "step" : undefined}
-                onClick={() => moveStep(index)}
-              />
-            ))}
+          <div
+            className="field-step-track"
+            role="tablist"
+            aria-label="Workflow progress"
+          >
+            {fieldSteps.map((name) => {
+              const index = steps.indexOf(name);
+              const isCurrent = index === step;
+              const isDone = index < step;
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className={`field-step-btn ${
+                    isCurrent ? "current" : isDone ? "done" : ""
+                  }`}
+                  aria-label={`Go to ${name}`}
+                  title={name}
+                  aria-current={isCurrent ? "step" : undefined}
+                  onClick={() => moveStep(index)}
+                >
+                  <span className="field-step-bar" />
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -803,10 +855,11 @@ export default function NoteEditor({
             <FileText size={23} />
             ServiceLOGME
           </span>
-          <h1>Customer acceptance</h1>
+          <h1>{customerAcknowledgement ? "Customer acceptance" : "Staff attestation"}</h1>
           <p>
-            Review the completed service details, then sign to confirm the
-            record.
+            {customerAcknowledgement
+              ? "Review the completed service details, then sign to confirm the record."
+              : "Review the completed internal record, then attest that the captured evidence is accurate."}
           </p>
         </div>
       )}
@@ -818,17 +871,83 @@ export default function NoteEditor({
             "The essentials for this service visit.",
             <>
               <div className="editor-form-grid">
-                <Field label="Job title" required>
-                  {input("job_title", "e.g. Air compressor service")}
+                <Field label="Record type" required>
+                  <select
+                    id="record_type"
+                    className="select"
+                    value={draft.record_type || "SERVICE"}
+                    onChange={(event) =>
+                      patch({
+                        record_type: event.target.value as ServiceNote["record_type"],
+                        billing_enabled: event.target.value === "SERVICE",
+                        finalization_type:
+                          event.target.value === "SERVICE" || event.target.value === "HANDOVER"
+                            ? "CUSTOMER_ACKNOWLEDGED"
+                            : "STAFF_ATTESTED",
+                      })
+                    }
+                  >
+                    <option value="RECEIPT">Receipt / storage</option>
+                    <option value="INSPECTION">Inspection</option>
+                    <option value="SERVICE">Service / repair</option>
+                    <option value="HANDOVER">Handover</option>
+                  </select>
+                </Field>
+                <Field label="Record title" required>
+                  {input("job_title", "e.g. Engine intake condition record")}
                 </Field>
                 <div className="editor-form-grid">
                   <Field label="Service date" required>
                     {input("service_date", undefined, "date")}
                   </Field>
                   <Field label="Time" required>
-                    {input("service_time", undefined, "time")}
+                  {input("service_time", undefined, "time")}
                   </Field>
                 </div>
+              </div>
+              <div className="item-context">
+                <div className="editor-section-heading compact-heading">
+                  <div>
+                    <h2>Item</h2>
+                    <p>Use a stable reference so its history can be found later.</p>
+                  </div>
+                </div>
+                <div className="editor-form-grid">
+                  <Field label="Saved item">
+                    <select
+                      className="select"
+                      value={draft.tracked_item_id || ""}
+                      onChange={(event) => {
+                        const item = trackedItems.find((candidate) => candidate.id === event.target.value);
+                        patch(item ? {
+                          tracked_item_id: item.id,
+                          item_name_snapshot: item.name,
+                          item_reference_snapshot: item.reference,
+                        } : { tracked_item_id: "" });
+                      }}
+                    >
+                      <option value="">Enter an item below</option>
+                      {trackedItems.map((item) => (
+                        <option key={item.id} value={item.id}>{item.reference} · {item.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Item name">
+                    {input("item_name_snapshot", "e.g. Cummins QSK19 engine")}
+                  </Field>
+                  <Field label="Item reference">
+                    {input("item_reference_snapshot", "Serial number or asset tag")}
+                  </Field>
+                  <Field label="Event location">
+                    {input("location_snapshot", "e.g. Bay B12")}
+                  </Field>
+                </div>
+                {!draft.tracked_item_id && (
+                  <button type="button" className="btn btn-secondary" disabled={itemBusy} onClick={() => void saveTrackedItem()}>
+                    {itemBusy ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}
+                    Save item for future records
+                  </button>
+                )}
               </div>
               <div className="person-in-charge">
                 <span className="person-avatar">
@@ -853,8 +972,10 @@ export default function NoteEditor({
           )}
           {section(
             1,
-            "Customer",
-            "Select a customer and review their contact information.",
+            customerAcknowledgement ? "Customer" : "Customer (optional)",
+            customerAcknowledgement
+              ? "Select the customer and review the contact who will acknowledge this record."
+              : "Add an owner or customer when one is relevant to this internal record.",
             <>
               <div className="customer-selection">
                 <Field label="Find customer">
@@ -865,7 +986,7 @@ export default function NoteEditor({
                     onChange={(e) => setCustomerSearch(e.target.value)}
                   />
                 </Field>
-                <Field label="Customer" required>
+                <Field label="Customer" required={customerAcknowledgement}>
                   <select
                     id="customer"
                     className="select"
@@ -910,7 +1031,7 @@ export default function NoteEditor({
                   </Field>
                   <Field
                     label="Mobile number"
-                    hint="A mobile or office number is required."
+                    hint={customerAcknowledgement ? "A mobile or office number is required for customer acknowledgement." : undefined}
                   >
                     {input("contact_mobile_snapshot", "+60", "tel")}
                   </Field>
@@ -1362,7 +1483,7 @@ export default function NoteEditor({
               Add charge
             </button>,
           )}
-          {section(
+          {draft.billing_enabled !== false && section(
             5,
             "Financial summary",
             "Review charges, discount and tax.",
@@ -1402,7 +1523,7 @@ export default function NoteEditor({
               {totalsBlock()}
             </div>,
           )}
-          {section(
+          {draft.billing_enabled !== false && section(
             5,
             "Payment",
             "Record how and when this service is paid.",
@@ -1501,10 +1622,20 @@ export default function NoteEditor({
           )}
           {section(
             6,
-            field ? "Review & sign" : "Customer acceptance",
             field
-              ? "Your signature confirms the service record below."
-              : "Ask the customer to review and acknowledge this service.",
+              ? customerAcknowledgement
+                ? "Review & sign"
+                : "Review & attest"
+              : customerAcknowledgement
+                ? "Customer acceptance"
+                : "Staff attestation",
+            field
+              ? customerAcknowledgement
+                ? "Your signature confirms the service record below."
+                : "Confirm that this internal record is complete and accurate."
+              : customerAcknowledgement
+                ? "Ask the customer to review and acknowledge this service."
+                : "A staff member confirms this internal record before it is completed.",
             <>
               {field && (
                 <div className="acceptance-review">
@@ -1520,14 +1651,17 @@ export default function NoteEditor({
                         "Record the work performed before completing this note."}
                     </p>
                   </div>
-                  <footer>
-                    <span>Total amount</span>
-                    <strong>
-                      {money(total?.grand_total || draft.grand_total)}
-                    </strong>
-                  </footer>
+                  {draft.billing_enabled !== false && (
+                    <footer>
+                      <span>Total amount</span>
+                      <strong>
+                        {money(total?.grand_total || draft.grand_total)}
+                      </strong>
+                    </footer>
+                  )}
                 </div>
               )}
+              {customerAcknowledgement ? <>
               <p className="acceptance-statement">{acceptanceStatement}</p>
               <div className="editor-form-grid">
                 <Field label="Signer name" required>
@@ -1597,6 +1731,13 @@ export default function NoteEditor({
                   })}
                 </p>
               )}
+              </> : <div className="staff-attestation">
+                <ShieldCheck size={20} />
+                <div>
+                  <strong>Staff attestation</strong>
+                  <p>You are confirming that this internal record accurately describes the item, location, observations, and evidence captured during the event.</p>
+                </div>
+              </div>}
             </>,
           )}
         </fieldset>
@@ -1609,12 +1750,12 @@ export default function NoteEditor({
             </div>
             <div className="completion-heading">
               <span>Completion</span>
-              <span>{completion.filter((c) => c.ok).length} of 5</span>
+              <span>{completion.filter((c) => c.ok).length} of {completion.length}</span>
             </div>
             <div className="completion-track">
               <span
                 style={{
-                  width: `${completion.filter((c) => c.ok).length * 20}%`,
+                  width: `${(completion.filter((c) => c.ok).length / completion.length) * 100}%`,
                 }}
               />
             </div>
@@ -1630,13 +1771,20 @@ export default function NoteEditor({
                 </a>
               ))}
             </div>
-            <div className="summary-total">
-              <span>Grand total</span>
-              <strong>{money(total?.grand_total || draft.grand_total)}</strong>
-              <small>
-                MYR · {draft.payment_status === "PAID" ? "Paid" : "Unpaid"}
-              </small>
-            </div>
+            {draft.billing_enabled !== false ? (
+              <div className="summary-total">
+                <span>Grand total</span>
+                <strong>{money(total?.grand_total || draft.grand_total)}</strong>
+                <small>
+                  MYR · {draft.payment_status === "PAID" ? "Paid" : "Unpaid"}
+                </small>
+              </div>
+            ) : (
+              <div className="summary-total summary-total-internal">
+                <span>Internal record</span>
+                <strong>No billing</strong>
+              </div>
+            )}
             <button
               type="button"
               className="btn btn-secondary"
@@ -1727,14 +1875,16 @@ export default function NoteEditor({
                     : `${readiness.firstIncomplete?.label || "Details"} required`
                 : saveState || "Draft service note"}
             </span>
-            <strong>{money(total?.grand_total || draft.grand_total)}</strong>
+            {hasBilling && (
+              <strong>{money(total?.grand_total || draft.grand_total)}</strong>
+            )}
           </div>
           <div>
             {step > 0 ? (
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => moveStep(step - 1)}
+                onClick={() => moveStep(previousFieldStep)}
               >
                 <ArrowLeft size={16} />
                 Back
@@ -1749,7 +1899,7 @@ export default function NoteEditor({
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => moveStep(step + 1)}
+                onClick={() => moveStep(nextFieldStep)}
               >
                 Continue
                 <ArrowRight size={16} />

@@ -260,7 +260,11 @@ export default function Application({
           </span>
           <h1>Service Note Completed</h1>
           <p className="mono">{note.service_number}</p>
-          <p>Customer signature recorded</p>
+          <p>
+            {note.finalization_type === "STAFF_ATTESTED"
+              ? "Staff attestation recorded"
+              : "Customer signature recorded"}
+          </p>
           <div className="completion-actions">
             <Link
               className="btn btn-primary"
@@ -295,10 +299,17 @@ export default function Application({
           note={note}
           customers={data.customers}
           employees={data.employees}
+          trackedItems={data.tracked_items ?? []}
           field={field}
           onSave={(n) => saveNote(n)}
           onComplete={(n) => saveNote(n, true)}
           onCreateCustomer={saveCustomer}
+          onCreateTrackedItem={async (item) => {
+            const saved = await repository.current!.saveTrackedItem(item);
+            await refresh();
+            setToast("Item saved");
+            return saved;
+          }}
           onDone={(n) => {
             if (n.status === "COMPLETED")
               router.push(`${base}/service-notes/${n.id}/completed`);

@@ -8,6 +8,7 @@ import {
   customerSnapshot,
   formatCurrency,
   isCompletedRecord,
+  searchableNoteText,
 } from "../src/lib/domain";
 import type { ServiceNote, Profile, Customer } from "../src/lib/types";
 describe("financial rules", () => {
@@ -176,6 +177,39 @@ describe("completion", () => {
       isCompletedRecord({ ...note, status: "COMPLETED", signature: null }),
     ).toBe(false);
   });
+  it("allows a staff-attested inspection without billing or customer acknowledgement", () => {
+    const inspection = {
+      ...note,
+      record_type: "INSPECTION",
+      customer_id: "",
+      customer_name_snapshot: "",
+      contact_mobile_snapshot: "",
+      billing_enabled: false,
+      payment_status: "UNPAID",
+      finalization_type: "STAFF_ATTESTED",
+      signature: null,
+      item_name_snapshot: "Cummins QSK19 engine",
+      item_reference_snapshot: "ENG-CUM-4821",
+      location_snapshot: "Bay B12",
+    } as ServiceNote;
+
+    expect(completionErrors(inspection)).toEqual([]);
+  });
+});
+
+it("indexes item references and narrative evidence for retrieval", () => {
+  const note = {
+    service_number: "SL-2026-000201",
+    item_name_snapshot: "Cummins QSK19 engine",
+    item_reference_snapshot: "ENG-CUM-4821",
+    job_title: "Intake condition record",
+    work_performed: "Corrosion observed on the sump.",
+    result_remarks: "Stored pending owner instructions.",
+    photos: [{ caption: "Lifting eye dent", name: "before.jpg" }],
+  } as ServiceNote;
+
+  expect(searchableNoteText(note)).toContain("eng-cum-4821");
+  expect(searchableNoteText(note)).toContain("lifting eye dent");
 });
 it("restricts employees to own organization and own records", () => {
   const p = {

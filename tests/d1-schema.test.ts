@@ -5,7 +5,11 @@ describe("D1 schema", () => {
   it("defines the organization-scoped ServiceLOGME data model", async () => {
     const sql = await readFile("migrations/0001_initial_schema.sql", "utf8");
     const authSql = await readFile("migrations/0002_auth_and_media.sql", "utf8");
-    const completeSql = `${sql}\n${authSql}`;
+    const traceabilitySql = await readFile(
+      "migrations/0003_item_traceability.sql",
+      "utf8",
+    );
+    const completeSql = `${sql}\n${authSql}\n${traceabilitySql}`;
 
     for (const table of [
       "organizations",
@@ -14,6 +18,7 @@ describe("D1 schema", () => {
       "sessions",
       "login_attempts",
       "customers",
+      "tracked_items",
       "service_notes",
       "labor_items",
       "material_items",
@@ -29,6 +34,7 @@ describe("D1 schema", () => {
     expect(sql).toContain("UNIQUE (organization_id, employee_id)");
     expect(sql).toContain("UNIQUE (organization_id, service_number)");
     expect(sql).toContain("CREATE INDEX IF NOT EXISTS idx_service_notes_org_status");
+    expect(completeSql).toContain("idx_service_notes_item_reference");
     expect(sql).toContain("PRAGMA foreign_keys = ON");
   });
 });

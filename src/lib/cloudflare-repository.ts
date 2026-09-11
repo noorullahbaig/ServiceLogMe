@@ -1,5 +1,5 @@
 import type { WorkspaceRepository } from "./repository";
-import type { Customer, Organization, Profile, ServiceNote, StoredMediaRef, WorkspaceData } from "./types";
+import type { Customer, Organization, Profile, ServiceNote, StoredMediaRef, TrackedItem, WorkspaceData } from "./types";
 
 type ActionBody = { action: string; [key: string]: unknown };
 
@@ -30,6 +30,7 @@ export class CloudflareWorkspaceRepository implements WorkspaceRepository {
   createNote() { return call<ServiceNote>({ action: "create-note" }); }
   saveNote(note: ServiceNote, complete = false) { return call<ServiceNote>({ action: "save-note", note, complete }); }
   saveCustomer(customer: Omit<Customer, "id" | "organization_id" | "created_at"> & { id?: string }) { return call<Customer>({ action: "save-customer", customer }); }
+  saveTrackedItem(item: Omit<TrackedItem, "id" | "organization_id" | "created_at" | "updated_at"> & { id?: string }) { return call<TrackedItem>({ action: "save-tracked-item", item }); }
   async saveEmployee(employee: Profile) { await call({ action: "save-employee", employee }); }
   async saveOrganization(organization: Organization) { await call({ action: "save-organization", organization }); }
   async uploadMedia(data: ArrayBuffer, contentType: string, purpose: "photo" | "signature") {

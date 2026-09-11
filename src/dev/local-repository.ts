@@ -5,6 +5,7 @@ import type {
   Customer,
   Profile,
   Organization,
+  TrackedItem,
 } from "@/lib/types";
 import { calculateTotals, completionErrors, canAccessNote } from "@/lib/domain";
 import { emptyNote } from "./fixtures";
@@ -153,7 +154,11 @@ export class LocalWorkspaceRepository implements WorkspaceRepository {
         if (errors.length) throw new Error(errors.join("\n"));
         note.status = "COMPLETED";
         note.completed_at = note.updated_at;
-        if (note.signature) note.signature.signed_at = note.updated_at;
+        if (note.finalization_type === "STAFF_ATTESTED") {
+          note.staff_attested_at = note.updated_at;
+        } else if (note.signature) {
+          note.signature.signed_at = note.updated_at;
+        }
       }
       data.notes[index] = note;
       this.event(
@@ -184,6 +189,39 @@ export class LocalWorkspaceRepository implements WorkspaceRepository {
       if (existing) data.customers[data.customers.indexOf(existing)] = customer;
       else data.customers.push(customer);
       return structuredClone(customer);
+    });
+  }
+  async saveTrackedItem(
+    input: Omit<TrackedItem, "id" | "organization_id" | "created_at" | "updated_at"> & {
+      id?: string;
+    },
+  ) {
+    return this.transact((data) => {
+      const name = input.name.trim(), reference = input.reference.trim();
+      if (!name || !reference)
+        throw new Error("Item name and reference are required.");
+      const items = data.tracked_items ?? (data.tracked_items = []);
+      const duplicate = items.find(
+        (item) =>
+          item.reference.toLowerCase() === reference.toLowerCase() &&
+          item.id !== input.id,
+      );
+      if (duplicate) throw new Error("An item with this reference already exists.");
+      const existing = input.id ? items.find((item) => item.id === input.id) : undefined;
+      const timestamp = new Date().toISOString();
+      const saved: TrackedItem = {
+        id: existing?.id ?? crypto.randomUUID(),
+        organization_id: data.profile.organization_id,
+        name,
+        reference,
+        customer_id: input.customer_id || undefined,
+        created_at: existing?.created_at ?? timestamp,
+        updated_at: timestamp,
+      };
+      const index = items.findIndex((item) => item.id === saved.id);
+      if (index < 0) items.push(saved);
+      else items[index] = saved;
+      return structuredClone(saved);
     });
   }
   async saveEmployee(input: Profile) {

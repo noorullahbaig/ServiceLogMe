@@ -22,7 +22,7 @@ import {
   X,
   ArrowUpRight,
 } from "lucide-react";
-import { money, shortDate, initials } from "@/lib/domain";
+import { money, shortDate, initials, searchableNoteText } from "@/lib/domain";
 import type { ServiceNote, Profile, Customer } from "@/lib/types";
 import "./workspace.css";
 export function NoteBadge({ value }: { value: string }) {
@@ -82,16 +82,7 @@ export function NotesTable({
           (!to || n.service_date <= to) &&
           (!createdFrom || n.created_at.slice(0, 10) >= createdFrom) &&
           (!createdTo || n.created_at.slice(0, 10) <= createdTo) &&
-          (!query ||
-            [
-              n.service_number,
-              n.customer_name_snapshot,
-              n.person_in_charge_name_snapshot,
-              n.job_title,
-            ]
-              .join(" ")
-              .toLowerCase()
-              .includes(query.toLowerCase())),
+          (!query || searchableNoteText(n).includes(query.toLowerCase())),
       ),
     [
       notes,

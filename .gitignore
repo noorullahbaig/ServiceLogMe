@@ -11,3 +11,4 @@ playwright-report/
 .vinext/
 .wrangler/
 .next-stale/
+.playwright-cli/

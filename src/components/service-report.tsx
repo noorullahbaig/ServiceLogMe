@@ -160,6 +160,8 @@ export function ServiceReport({
   field = false,
 }: ReportProps) {
   const [printError, setPrintError] = useState("");
+  const staffAttested = note.finalization_type === "STAFF_ATTESTED";
+  const hasBilling = note.billing_enabled !== false;
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("print") !== "1")
       return;
@@ -177,13 +179,17 @@ export function ServiceReport({
     <div className="service-report-layout">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Customer service report</p>
+          <p className="eyebrow">
+            {staffAttested ? "Internal item record" : "Customer service report"}
+          </p>
           <div className="report-title-line">
             <h1 className="page-title">{note.service_number}</h1>
             <span className="badge badge-success">Completed</span>
           </div>
           <p className="muted">
-            A finalized record of service and customer acceptance.
+            {staffAttested
+              ? "A finalized internal record with staff attestation."
+              : "A finalized record of service and customer acceptance."}
           </p>
         </div>
         <ReportActions
@@ -245,9 +251,13 @@ export function ServiceReport({
 
         <section className="report-two-column">
           <div className="report-block">
-            <p className="report-section-kicker">Customer</p>
-            <h2>{note.customer_name_snapshot || "—"}</h2>
+            <p className="report-section-kicker">{staffAttested ? "Item" : "Customer"}</p>
+            <h2>{staffAttested ? note.item_name_snapshot || "—" : note.customer_name_snapshot || "—"}</h2>
             <dl className="report-definition-list">
+              {staffAttested ? <>
+                <div><dt>Reference</dt><dd className="mono"><Value>{note.item_reference_snapshot}</Value></dd></div>
+                <div><dt>Event location</dt><dd><Value>{note.location_snapshot}</Value></dd></div>
+              </> : <>
               <div>
                 <dt>Contact</dt>
                 <dd>
@@ -282,6 +292,7 @@ export function ServiceReport({
                   <Value>{note.customer_address_snapshot}</Value>
                 </dd>
               </div>
+              </>}
             </dl>
           </div>
           <div className="report-block report-job-summary">
@@ -313,6 +324,7 @@ export function ServiceReport({
           </div>
         </section>
 
+        {hasBilling && <>
         <section className="report-section">
           <div className="report-section-heading">
             <span>02</span>
@@ -466,11 +478,12 @@ export function ServiceReport({
             </table>
           </div>
         </section>
+        </>}
 
         <section className="report-section">
           <div className="report-section-heading">
-            <span>05</span>
-            <h2>Service photos</h2>
+            <span>{hasBilling ? "05" : "02"}</span>
+            <h2>{staffAttested ? "Record photos" : "Service photos"}</h2>
           </div>
           {note.photos.length ? (
             <div className="report-photo-grid">
@@ -494,7 +507,7 @@ export function ServiceReport({
           )}
         </section>
 
-        <section className="report-section report-financial-area">
+        {hasBilling && <section className="report-section report-financial-area">
           <div>
             <div className="report-section-heading">
               <span>06</span>
@@ -570,13 +583,17 @@ export function ServiceReport({
               </div>
             </dl>
           </div>
-        </section>
+        </section>}
 
         <section className="report-section report-acceptance">
           <div className="report-section-heading">
-            <span>07</span>
-            <h2>Customer acceptance</h2>
+            <span>{hasBilling ? "07" : "03"}</span>
+            <h2>{staffAttested ? "Staff attestation" : "Customer acceptance"}</h2>
           </div>
+          {staffAttested ? <>
+            <p>This internal record was attested by the staff member responsible for the event.</p>
+            <p className="report-empty-state">Attested {date(note.staff_attested_at || note.completed_at || note.updated_at, true)}</p>
+          </> : <>
           <p>{acceptanceStatement}</p>
           {note.signature ? (
             <div className="report-signature">
@@ -598,6 +615,7 @@ export function ServiceReport({
               No customer signature recorded.
             </p>
           )}
+          </>}
         </section>
 
         <footer className="report-screen-footer">

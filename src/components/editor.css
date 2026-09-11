@@ -90,6 +90,46 @@
   padding: 7px 9px;
   min-height: 33px;
 }
+.item-context {
+  margin-top: 27px;
+  padding-top: 25px;
+  border-top: 1px solid #e4e8ee;
+}
+.item-context .compact-heading {
+  margin-bottom: 17px;
+}
+.item-context > .btn {
+  margin-top: 16px;
+}
+.staff-attestation {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #c8e2d2;
+  background: #f2faf5;
+  padding: 16px;
+  border-radius: 8px;
+  color: #205d38;
+}
+.staff-attestation > svg {
+  margin-top: 1px;
+  color: #217343;
+}
+.staff-attestation strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+}
+.staff-attestation p {
+  margin: 5px 0 0;
+  color: #467157;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.summary-total-internal strong {
+  font-size: 16px;
+  letter-spacing: -0.25px;
+}
 .editor-section > .field {
   margin-bottom: 18px;
 }
@@ -827,51 +867,115 @@
   white-space: nowrap;
 }
 .field-step-header {
-  border-bottom: 1px solid #e4e8ee;
-  padding: 0 0 19px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 0 16px;
+  margin-bottom: 20px;
 }
+.field-step-meta,
 .field-step-header > div:first-child {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 13px;
+  margin-bottom: 10px;
 }
+.field-step-counter,
 .field-step-header > div:first-child > span {
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: #8b95a5;
-  font-weight: 550;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--secondary);
+  font-weight: 650;
+  text-transform: uppercase;
 }
+.field-step-title,
 .field-step-header strong {
-  font-size: 12px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
 }
 .field-step-track {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
 }
-.field-step-track > button {
+.field-step-track > button,
+.field-step-btn {
   position: relative;
-  cursor: pointer;
-  border: 0;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
-  height: 6px;
-  border-radius: 5px;
-  background: #e4e8ee;
+  margin: 0;
+  border: 0;
+  background: transparent !important;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 .field-step-track > button:before {
-  position: absolute;
-  content: "";
-  top: -12px;
-  bottom: -12px;
-  inset-inline: 0;
+  display: none;
 }
-.field-step-track > button.current {
-  background: #2856e8;
+.field-step-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--border);
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.2s ease,
+              transform 0.15s ease;
 }
-.field-step-track > button.done {
-  background: #a2b4f5;
+.field-step-track > button:hover .field-step-bar {
+  background: var(--border-strong);
+}
+.field-step-track > button.done,
+.field-step-btn.done {
+  background: transparent !important;
+}
+.field-step-track > button.done .field-step-bar {
+  background: var(--blue);
+  opacity: 0.45;
+}
+.field-step-track > button.done:hover .field-step-bar {
+  opacity: 0.75;
+}
+.field-step-track > button.current,
+.field-step-btn.current {
+  background: transparent !important;
+}
+.field-step-track > button.current .field-step-bar {
+  background: var(--blue);
+  opacity: 1;
+}
+.field-step-track > button:active .field-step-bar {
+  transform: scaleY(1.3);
+}
+.field-step-track > button:focus-visible {
+  outline: none;
+}
+.field-step-track > button:focus-visible .field-step-bar {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+}
+
+@media (max-width: 640px) {
+  .field-step-header {
+    padding: 0 0 14px;
+    margin-bottom: 16px;
+  }
+  .field-step-track {
+    gap: 5px;
+  }
+  .field-step-track > button,
+  .field-step-btn {
+    height: 36px;
+  }
+  .field-step-bar {
+    height: 4px;
+  }
 }
 .field-note-editor .input,
 .field-note-editor .select {
@@ -1503,30 +1607,4 @@
 .summary-requirements a {
   color: var(--blue);
   font-weight: 600;
-}
-.field-step-track > button {
-  height: 24px;
-  background: transparent;
-}
-.field-step-track > button::after {
-  content: "";
-  position: absolute;
-  inset: 9px 0;
-  border-radius: 5px;
-  background: var(--border);
-}
-.field-step-track > button.current::after {
-  background: var(--blue);
-}
-.field-step-track > button.done::after {
-  background: #8098ed;
-}
-
-@media (max-width: 640px) {
-  .field-step-track > button {
-    height: 44px;
-  }
-  .field-step-track > button::after {
-    inset-block: 19px;
-  }
 }

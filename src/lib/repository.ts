@@ -1,9 +1,10 @@
-import type {WorkspaceData,ServiceNote,Customer,Profile,Organization,StoredMediaRef} from './types';
+import type {WorkspaceData,ServiceNote,Customer,Profile,Organization,StoredMediaRef,TrackedItem} from './types';
 export interface WorkspaceRepository {
  read():Promise<WorkspaceData>;
  createNote():Promise<ServiceNote>;
  saveNote(note:ServiceNote,complete?:boolean):Promise<ServiceNote>;
- saveCustomer(input:Omit<Customer,'id'|'organization_id'|'created_at'> & {id?:string}):Promise<Customer>;
+  saveCustomer(input:Omit<Customer,'id'|'organization_id'|'created_at'> & {id?:string}):Promise<Customer>;
+  saveTrackedItem(input: Omit<TrackedItem, 'id'|'organization_id'|'created_at'|'updated_at'> & {id?:string}): Promise<TrackedItem>;
  saveEmployee(input:Profile):Promise<void>;
  saveOrganization(input:Organization):Promise<void>;
  uploadMedia?(data: ArrayBuffer, contentType: string, purpose: 'photo'|'signature'): Promise<StoredMediaRef>;
