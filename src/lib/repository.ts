@@ -1,4 +1,4 @@
-import type {WorkspaceData,ServiceNote,Customer,Profile,Organization,StoredMediaRef,TrackedItem} from './types';
+import type {WorkspaceData,ServiceNote,Customer,Profile,Organization,StoredMediaRef,TrackedItem,Photo,EvidencePhotoUploadMetadata,ReportPage,ReportQuery} from './types';
 export interface WorkspaceRepository {
  read():Promise<WorkspaceData>;
  createNote():Promise<ServiceNote>;
@@ -9,4 +9,7 @@ export interface WorkspaceRepository {
  saveOrganization(input:Organization):Promise<void>;
  uploadMedia?(data: ArrayBuffer, contentType: string, purpose: 'photo'|'signature'): Promise<StoredMediaRef>;
  deleteMedia?(id: string): Promise<void>;
+ uploadEvidencePhoto?(reportId:string,file:File,metadata:EvidencePhotoUploadMetadata):Promise<Photo>;
+ deleteEvidencePhoto?(reportId:string,photoId:string):Promise<void>;
+ listReports?(query:ReportQuery):Promise<ReportPage>;
 }

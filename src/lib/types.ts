@@ -27,6 +27,7 @@ export interface Customer {
   contact_position: string;
   mobile: string;
   office: string;
+  contact_number?: string;
   email: string;
   address: string;
   notes: string;
@@ -64,7 +65,32 @@ export interface Photo {
   caption: string;
   created_at: string;
   name: string;
+  original_url?: string;
+  original_sha256?: string;
+  derivative_sha256?: string;
+  source?: PhotoSource;
+  uploaded_by_id?: string;
+  uploaded_by_name_snapshot?: string;
+  gps_latitude?: number;
+  gps_longitude?: number;
+  gps_accuracy?: number;
+  gps_device_timestamp?: string;
 }
+export type PhotoSource = "CAMERA_CAPTURE" | "FILE_UPLOAD";
+export interface EvidencePhotoUploadMetadata {
+  source: PhotoSource;
+  caption?: string;
+  gps_latitude?: number;
+  gps_longitude?: number;
+  gps_accuracy?: number;
+  gps_device_timestamp?: string;
+}
+export type ConditionCode =
+  | "NO_VISIBLE_ISSUE"
+  | "EXISTING_WEAR_DAMAGE"
+  | "DAMAGED"
+  | "UNABLE_TO_FULLY_INSPECT"
+  | "OTHER";
 export interface Signature {
   file_id?: string;
   signer_name: string;
@@ -105,11 +131,29 @@ export interface ServiceNote extends Totals {
   service_number: string;
   status: "DRAFT" | "COMPLETED";
   revision: number;
+  schema_version?: 1 | 2;
   record_type?: RecordType;
   tracked_item_id?: string;
   item_name_snapshot?: string;
   item_reference_snapshot?: string;
   location_snapshot?: string;
+  contact_number_snapshot?: string;
+  invoice_number?: string;
+  delivery_number?: string;
+  quantity?: string;
+  brand?: string;
+  model?: string;
+  declared_total_value?: string;
+  declared_currency?: string;
+  condition_code?: ConditionCode | "";
+  condition_remarks?: string;
+  organization_name_snapshot?: string;
+  organization_email_snapshot?: string;
+  organization_phone_snapshot?: string;
+  organization_address_snapshot?: string;
+  organization_timezone_snapshot?: string;
+  acknowledgement_text_snapshot?: string;
+  acknowledgement_enabled?: boolean;
   billing_enabled?: boolean;
   finalization_type?: FinalizationType;
   staff_attested_at?: string;
@@ -148,6 +192,15 @@ export interface ServiceNote extends Totals {
   updated_at: string;
   completed_at: string | null;
 }
+export type LegacyServiceRecord = ServiceNote & { schema_version?: 1 };
+export type EvidenceReport = ServiceNote & { schema_version: 2 };
+export type ReportRecord = LegacyServiceRecord | EvidenceReport;
+export type EvidencePhoto = Photo & {
+  original_url: string;
+  original_sha256: string;
+  source: PhotoSource;
+  uploaded_by_name_snapshot: string;
+};
 export interface AuditEvent {
   id: string;
   note_id: string;
@@ -166,8 +219,31 @@ export interface WorkspaceData {
   notes: ServiceNote[];
   events: AuditEvent[];
 }
+export interface ReportQuery {
+  q?: string;
+  status?: ServiceNote["status"] | "";
+  employee?: string;
+  customer?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+export interface ReportPage {
+  reports: ServiceNote[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
 export type CompletionRequirementId =
-  "service" | "customer" | "work" | "payment" | "acceptance";
+  | "service"
+  | "customer"
+  | "work"
+  | "payment"
+  | "acceptance"
+  | "item"
+  | "condition"
+  | "photos";
 export interface CompletionRequirement {
   id: CompletionRequirementId;
   label: string;

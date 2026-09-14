@@ -14,6 +14,7 @@ import { Shell, Brand } from "./shell";
 import { Overview, FieldHome } from "./overview";
 import { NotesTable } from "./notes-table";
 import NoteEditor from "./note-editor";
+import EvidenceReportEditor from "./evidence-report-editor";
 import { NoteDetail } from "./note-detail";
 import { ServiceReport } from "./service-report";
 import {
@@ -24,7 +25,12 @@ import {
   FieldProfile,
 } from "./directories";
 import type { WorkspaceRepository } from "@/lib/repository";
-import type { WorkspaceData, ServiceNote, Customer } from "@/lib/types";
+import type {
+  WorkspaceData,
+  ServiceNote,
+  Customer,
+  ReportQuery,
+} from "@/lib/types";
 import { isCompletedRecord } from "@/lib/domain";
 
 function DraftCompletionRedirect({ href }: { href: string }) {
@@ -67,18 +73,19 @@ export default function Application({
             import("@/dev/fixtures"),
           ]);
         repository.current = new LocalWorkspaceRepository(
-          "servicelogme-local-v1",
+          "servicelogme-local-v2",
           createDevelopmentWorkspace(),
         );
       } else {
-        const { CloudflareWorkspaceRepository } = await import(
-          "@/lib/cloudflare-repository"
-        );
+        const { CloudflareWorkspaceRepository } =
+          await import("@/lib/cloudflare-repository");
         repository.current = new CloudflareWorkspaceRepository();
       }
       setData(await repository.current.read());
     })();
-    initialization.current.catch((e) => setError(e instanceof Error ? e.message : "Unable to open workspace"));
+    initialization.current.catch((e) =>
+      setError(e instanceof Error ? e.message : "Unable to open workspace"),
+    );
   }, [localEnabled]);
   useEffect(() => {
     if (!toast) return;
@@ -94,6 +101,11 @@ export default function Application({
   }, [path, router]);
   const refresh = useCallback(async () => {
     if (repository.current) setData(await repository.current.read());
+  }, []);
+  const listReports = useCallback(async (query: ReportQuery) => {
+    if (!repository.current?.listReports)
+      throw new Error("Report search is not configured.");
+    return repository.current.listReports(query);
   }, []);
   useEffect(() => {
     const listener = () => {
@@ -122,7 +134,7 @@ export default function Application({
   async function saveNote(n: ServiceNote, complete = false) {
     const saved = await repository.current!.saveNote(n, complete);
     await refresh();
-    if (!complete) setToast("Service Note saved");
+    if (!complete) setToast("Report saved");
     return saved;
   }
   async function saveCustomer(
@@ -178,68 +190,57 @@ export default function Application({
   else if (relative === "/dashboard" || path === "/")
     content = <Overview data={data} />;
   else if (relative === "/service-notes" || relative === "/reports") {
-    const reports = relative === "/reports",
-      status = params.get("status");
+    const status = params.get("status");
     content = (
       <>
         <div className="page-header">
           <div>
-            <h1 className="page-title">
-              {reports ? "Reports" : "Service Notes"}
-            </h1>
+            <h1 className="page-title">Reports</h1>
             <p className="page-subtitle">
-              {reports
-                ? "Completed service records, ready to print and share."
-                : "Document every service. Keep every detail."}
+              Evidence-backed records of item condition and storage context.
             </p>
           </div>
-          {!reports && (
-            <Link
-              href={`${base}/service-notes/new`}
-              className="btn btn-primary"
-            >
-              <Plus />
-              New Service Note
-            </Link>
-          )}
+          <Link href={`${base}/service-notes/new`} className="btn btn-primary">
+            <Plus />
+            Create Report
+          </Link>
         </div>
-        {!reports && (
-          <nav className="index-tabs" aria-label="Service Note status">
-            {[
-              { label: "All notes", status: "", count: ownNotes.length },
-              {
-                label: "Draft",
-                status: "DRAFT",
-                count: ownNotes.filter((n) => n.status === "DRAFT").length,
-              },
-              {
-                label: "Completed",
-                status: "COMPLETED",
-                count: ownNotes.filter((n) => n.status === "COMPLETED").length,
-              },
-            ].map((t) => (
-              <Link
-                key={t.label}
-                className={`index-tab ${(status ?? "") === t.status ? "active" : ""}`}
-                href={`${base}/service-notes${t.status ? "?status=" + t.status : ""}`}
-              >
-                {t.label}
-                <span>{t.count}</span>
-              </Link>
-            ))}
-          </nav>
-        )}
+        <nav className="index-tabs" aria-label="Report status">
+          {[
+            { label: "All reports", status: "", count: ownNotes.length },
+            {
+              label: "Draft",
+              status: "DRAFT",
+              count: ownNotes.filter((n) => n.status === "DRAFT").length,
+            },
+            {
+              label: "Completed",
+              status: "COMPLETED",
+              count: ownNotes.filter((n) => n.status === "COMPLETED").length,
+            },
+          ].map((t) => (
+            <Link
+              key={t.label}
+              className={`index-tab ${(status ?? "") === t.status ? "active" : ""}`}
+              href={`${base}/service-notes${t.status ? "?status=" + t.status : ""}`}
+            >
+              {t.label}
+              <span>{t.count}</span>
+            </Link>
+          ))}
+        </nav>
         <NotesTable
           notes={ownNotes}
           employees={data.employees}
           customers={data.customers}
-          reports={reports}
+          reports={false}
           field={field}
+          onQuery={!localEnabled ? listReports : undefined}
         />
         {!field && (
           <p className="index-caption">
             <ShieldCheck />
-            Completed Service Notes are signed records and cannot be edited.
+            Submitted Reports and their evidence are read-only.
           </p>
         )}
       </>
@@ -248,7 +249,7 @@ export default function Application({
     content = (
       <div className="loading-state">
         <span className="spinner" />
-        Creating your Service Note…
+        Creating your Report…
       </div>
     );
   else if (parts[0] === "service-notes" && note) {
@@ -258,20 +259,16 @@ export default function Application({
           <span className="completion-check">
             <Check />
           </span>
-          <h1>Service Note Completed</h1>
+          <h1>Report Submitted</h1>
           <p className="mono">{note.service_number}</p>
-          <p>
-            {note.finalization_type === "STAFF_ATTESTED"
-              ? "Staff attestation recorded"
-              : "Customer signature recorded"}
-          </p>
+          <p>Evidence and report details are now read-only.</p>
           <div className="completion-actions">
             <Link
               className="btn btn-primary"
               href={`${base}/reports/${note.id}`}
             >
               <FileCheck2 />
-              View Service Report
+              View Report
             </Link>
             <Link
               className="btn btn-secondary"
@@ -293,29 +290,59 @@ export default function Application({
         />
       );
     else if (note.status === "DRAFT")
-      content = (
-        <NoteEditor
-          key={note.id}
-          note={note}
-          customers={data.customers}
-          employees={data.employees}
-          trackedItems={data.tracked_items ?? []}
-          field={field}
-          onSave={(n) => saveNote(n)}
-          onComplete={(n) => saveNote(n, true)}
-          onCreateCustomer={saveCustomer}
-          onCreateTrackedItem={async (item) => {
-            const saved = await repository.current!.saveTrackedItem(item);
-            await refresh();
-            setToast("Item saved");
-            return saved;
-          }}
-          onDone={(n) => {
-            if (n.status === "COMPLETED")
-              router.push(`${base}/service-notes/${n.id}/completed`);
-          }}
-        />
-      );
+      content =
+        note.schema_version === 2 ? (
+          <EvidenceReportEditor
+            key={note.id}
+            note={note}
+            customers={data.customers}
+            organization={data.organization}
+            field={field}
+            onSave={(n) => saveNote(n)}
+            onComplete={(n) => saveNote(n, true)}
+            onCreateCustomer={saveCustomer}
+            onUploadPhoto={async (reportId, file, metadata) => {
+              if (!repository.current?.uploadEvidencePhoto)
+                throw new Error("Evidence storage is not configured.");
+              return repository.current.uploadEvidencePhoto(
+                reportId,
+                file,
+                metadata,
+              );
+            }}
+            onDeletePhoto={async (reportId, photoId) => {
+              if (!repository.current?.deleteEvidencePhoto)
+                throw new Error("Evidence storage is not configured.");
+              await repository.current.deleteEvidencePhoto(reportId, photoId);
+            }}
+            onDone={(n) => {
+              if (n.status === "COMPLETED")
+                router.push(`${base}/service-notes/${n.id}/completed`);
+            }}
+          />
+        ) : (
+          <NoteEditor
+            key={note.id}
+            note={note}
+            customers={data.customers}
+            employees={data.employees}
+            trackedItems={data.tracked_items ?? []}
+            field={field}
+            onSave={(n) => saveNote(n)}
+            onComplete={(n) => saveNote(n, true)}
+            onCreateCustomer={saveCustomer}
+            onCreateTrackedItem={async (item) => {
+              const saved = await repository.current!.saveTrackedItem(item);
+              await refresh();
+              setToast("Item saved");
+              return saved;
+            }}
+            onDone={(n) => {
+              if (n.status === "COMPLETED")
+                router.push(`${base}/service-notes/${n.id}/completed`);
+            }}
+          />
+        );
     else content = null;
   } else if (parts[0] === "reports" && note && isCompletedRecord(note))
     content = (

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -22,8 +22,14 @@ import {
   X,
   ArrowUpRight,
 } from "lucide-react";
-import { money, shortDate, initials, searchableNoteText } from "@/lib/domain";
-import type { ServiceNote, Profile, Customer } from "@/lib/types";
+import { shortDate, initials, searchableNoteText } from "@/lib/domain";
+import type {
+  ServiceNote,
+  Profile,
+  Customer,
+  ReportPage,
+  ReportQuery,
+} from "@/lib/types";
 import "./workspace.css";
 export function NoteBadge({ value }: { value: string }) {
   return (
@@ -39,6 +45,7 @@ export function NotesTable({
   compact = false,
   reports = false,
   field = false,
+  onQuery,
 }: {
   notes: ServiceNote[];
   employees?: Profile[];
@@ -46,23 +53,44 @@ export function NotesTable({
   compact?: boolean;
   reports?: boolean;
   field?: boolean;
+  onQuery?: (query: ReportQuery) => Promise<ReportPage>;
 }) {
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [serverPage, setServerPage] = useState<ReportPage | null>(null);
   const [sorting, setSorting] = useState<SortingState>([
-    { id: reports ? "completed_at" : "service_date", desc: true },
+    { id: reports ? "completed_at" : "created_at", desc: true },
   ]);
   const query = compact ? "" : (params.get("q") ?? ""),
     status = compact ? "" : (params.get("status") ?? ""),
-    payment = compact ? "" : (params.get("payment") ?? ""),
     employee = compact ? "" : (params.get("employee") ?? ""),
     customer = compact ? "" : (params.get("customer") ?? ""),
     from = compact ? "" : (params.get("from") ?? ""),
     to = compact ? "" : (params.get("to") ?? ""),
     createdFrom = compact ? "" : (params.get("createdFrom") ?? ""),
     createdTo = compact ? "" : (params.get("createdTo") ?? "");
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  useEffect(() => {
+    if (!onQuery || compact) return;
+    let active = true;
+    void onQuery({
+      q: query,
+      status: status as ReportQuery["status"],
+      employee,
+      customer,
+      from,
+      to,
+      page,
+      pageSize: 10,
+    }).then((result) => {
+      if (active) setServerPage(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onQuery, compact, query, status, employee, customer, from, to, page]);
   function filter(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
@@ -71,24 +99,23 @@ export function NotesTable({
   }
   const filtered = useMemo(
     () =>
-      notes.filter(
+      (serverPage?.reports ?? notes).filter(
         (n) =>
           (!reports || n.status === "COMPLETED") &&
           (!status || n.status === status) &&
-          (!payment || n.payment_status === payment) &&
           (!employee || n.person_in_charge_id === employee) &&
           (!customer || n.customer_id === customer) &&
-          (!from || n.service_date >= from) &&
-          (!to || n.service_date <= to) &&
+          (!from || n.created_at.slice(0, 10) >= from) &&
+          (!to || n.created_at.slice(0, 10) <= to) &&
           (!createdFrom || n.created_at.slice(0, 10) >= createdFrom) &&
           (!createdTo || n.created_at.slice(0, 10) <= createdTo) &&
           (!query || searchableNoteText(n).includes(query.toLowerCase())),
       ),
     [
       notes,
+      serverPage,
       reports,
       status,
-      payment,
       employee,
       customer,
       from,
@@ -99,14 +126,14 @@ export function NotesTable({
     ],
   );
   const activeFilters =
-    [status, payment, employee, customer, from, to].filter(Boolean).length +
+    [status, employee, customer, from, to].filter(Boolean).length +
     (createdFrom || createdTo ? 1 : 0);
   const prefix = field ? "/field" : "";
   const columns = useMemo<ColumnDef<ServiceNote>[]>(
     () => [
       {
         accessorKey: "service_number",
-        header: "Service #",
+        header: "Report number",
         cell: ({ row }) => (
           <Link
             href={`${prefix}/${reports ? "reports" : "service-notes"}/${row.original.id}`}
@@ -117,14 +144,14 @@ export function NotesTable({
         ),
       },
       {
-        accessorKey: reports ? "completed_at" : "service_date",
-        header: reports ? "Completed" : "Date",
+        accessorKey: reports ? "completed_at" : "created_at",
+        header: "Report date",
         cell: ({ row }) => (
           <span className="table-date">
             {shortDate(
               reports
                 ? (row.original.completed_at ?? row.original.service_date)
-                : row.original.service_date,
+                : row.original.created_at,
             )}
           </span>
         ),
@@ -139,16 +166,23 @@ export function NotesTable({
         ),
       },
       {
-        accessorKey: "job_title",
-        header: "Job title",
+        accessorKey: "item_name_snapshot",
+        header: "Item description",
         cell: ({ row }) => (
           <Link
             className="table-job"
             href={`${prefix}/service-notes/${row.original.id}`}
-            title={row.original.job_title}
+            title={row.original.item_name_snapshot}
           >
-            {row.original.job_title || "Untitled Service Note"}
+            {row.original.item_name_snapshot || "Item not described"}
           </Link>
+        ),
+      },
+      {
+        accessorKey: "item_reference_snapshot",
+        header: "Item identifier / reference",
+        cell: ({ getValue }) => (
+          <span className="mono">{String(getValue() || "—")}</span>
         ),
       },
       {
@@ -160,21 +194,6 @@ export function NotesTable({
             <span className="table-person">{String(getValue())}</span>
           </div>
         ),
-      },
-      {
-        accessorKey: "grand_total",
-        header: "Total",
-        sortingFn: (a, b) =>
-          Number(a.original.grand_total) - Number(b.original.grand_total),
-        cell: ({ getValue }) => (
-          <span className="table-amount">{money(String(getValue()))}</span>
-        ),
-        meta: { numeric: true },
-      },
-      {
-        accessorKey: "payment_status",
-        header: "Payment",
-        cell: ({ getValue }) => <NoteBadge value={String(getValue())} />,
       },
       ...(reports
         ? [
@@ -222,8 +241,8 @@ export function NotesTable({
             <label className="search-input">
               <Search size={15} />
               <input
-                aria-label="Search service notes"
-                placeholder="Search service #, customer, employee…"
+                aria-label="Search reports"
+                placeholder="Search report, customer, item or reference…"
                 value={query}
                 onChange={(e) => filter("q", e.target.value)}
               />
@@ -322,36 +341,21 @@ export function NotesTable({
                 </select>
               </label>
               <label className="field">
-                Payment
+                Customer
                 <select
-                  aria-label="Payment"
+                  aria-label="Customer"
                   className="select"
-                  value={payment}
-                  onChange={(e) => filter("payment", e.target.value)}
+                  value={customer}
+                  onChange={(e) => filter("customer", e.target.value)}
                 >
-                  <option value="">All payments</option>
-                  <option value="PAID">Paid</option>
-                  <option value="UNPAID">Unpaid</option>
+                  <option value="">All customers</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </label>
-              {reports && (
-                <label className="field">
-                  Customer
-                  <select
-                    aria-label="Customer"
-                    className="select"
-                    value={customer}
-                    onChange={(e) => filter("customer", e.target.value)}
-                  >
-                    <option value="">All customers</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <button
                 className="btn btn-ghost"
                 onClick={() => router.replace(path, { scroll: false })}
@@ -366,15 +370,11 @@ export function NotesTable({
       {filtered.length === 0 ? (
         <div className="empty-state">
           <Files />
-          <h3>
-            {notes.length
-              ? "No matching Service Notes"
-              : "No Service Notes yet"}
-          </h3>
+          <h3>{notes.length ? "No matching Reports" : "No Reports yet"}</h3>
           <p>
             {notes.length
               ? "Try a different search or adjust your filters."
-              : "Create a Service Note to begin documenting service visits."}
+              : "Create a Report to begin documenting stored items."}
           </p>
           {notes.length > 0 ? (
             <button
@@ -389,7 +389,7 @@ export function NotesTable({
                 className="btn btn-primary"
                 href={`${prefix}/service-notes/new`}
               >
-                New Service Note
+                Create Report
               </Link>
             )
           )}
@@ -406,11 +406,11 @@ export function NotesTable({
                 <span className="mono">{n.service_number}</span>
                 <NoteBadge value={n.status} />
               </div>
-              <h3>{n.job_title || "Untitled Service Note"}</h3>
+              <h3>{n.item_name_snapshot || "Item not described"}</h3>
               <p>{n.customer_name_snapshot || "Customer not selected"}</p>
               <div className="field-note-foot">
-                <span>{shortDate(n.service_date)}</span>
-                <strong>{money(n.grand_total)}</strong>
+                <span>{shortDate(n.created_at)}</span>
+                <strong>{n.location_snapshot || "Location pending"}</strong>
               </div>
             </Link>
           ))}
@@ -478,28 +478,50 @@ export function NotesTable({
       {!compact && filtered.length > 0 && (
         <div className="table-footer">
           <span>
-            Showing {table.getState().pagination.pageIndex * 10 + 1}–
+            Showing{" "}
+            {serverPage
+              ? (serverPage.page - 1) * serverPage.pageSize + 1
+              : table.getState().pagination.pageIndex * 10 + 1}
+            –
             {Math.min(
-              (table.getState().pagination.pageIndex + 1) * 10,
-              filtered.length,
+              serverPage
+                ? serverPage.page * serverPage.pageSize
+                : (table.getState().pagination.pageIndex + 1) * 10,
+              serverPage?.total ?? filtered.length,
             )}{" "}
-            of {filtered.length} Service Notes
+            of {serverPage?.total ?? filtered.length} Reports
           </span>
           <div className="pagination">
             <button
               className="icon-button"
               aria-label="Previous page"
-              disabled={!table.getCanPreviousPage()}
-              onClick={() => table.previousPage()}
+              disabled={
+                serverPage ? serverPage.page <= 1 : !table.getCanPreviousPage()
+              }
+              onClick={() =>
+                serverPage
+                  ? filter("page", String(serverPage.page - 1))
+                  : table.previousPage()
+              }
             >
               <ChevronLeft size={15} />
             </button>
-            <span>{table.getState().pagination.pageIndex + 1}</span>
+            <span>
+              {serverPage?.page ?? table.getState().pagination.pageIndex + 1}
+            </span>
             <button
               className="icon-button"
               aria-label="Next page"
-              disabled={!table.getCanNextPage()}
-              onClick={() => table.nextPage()}
+              disabled={
+                serverPage
+                  ? serverPage.page * serverPage.pageSize >= serverPage.total
+                  : !table.getCanNextPage()
+              }
+              onClick={() =>
+                serverPage
+                  ? filter("page", String(serverPage.page + 1))
+                  : table.nextPage()
+              }
             >
               <ChevronRight size={15} />
             </button>

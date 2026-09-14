@@ -9,6 +9,8 @@ import {
   formatCurrency,
 } from "@/lib/domain";
 import "./report.css";
+import { buildReportViewModel } from "@/lib/report-model";
+import { EvidenceReportView } from "./evidence-report-view";
 
 type ReportProps = {
   note: ServiceNote;
@@ -175,6 +177,10 @@ export function ServiceReport({
         ),
       );
   }, []);
+  if (note.schema_version === 2) {
+    const model = buildReportViewModel(note, organization);
+    if (model.kind === "EVIDENCE_REPORT") return <div className="service-report-layout"><header className="page-header"><div><p className="eyebrow">Warehouse evidence</p><div className="report-title-line"><h1 className="page-title">{model.number}</h1><span className="badge badge-success">Completed</span></div><p className="muted">A read-only record of item condition and storage context.</p></div><ReportActions note={note} organization={organization} field={field} context="report" /></header>{printError && <p className="report-action-error" role="alert">{printError}</p>}<EvidenceReportView model={model} /></div>;
+  }
   return (
     <div className="service-report-layout">
       <header className="page-header">

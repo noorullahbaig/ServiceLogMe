@@ -52,7 +52,7 @@ export default function LoginPage() {
         <div className="login-story-copy">
           <p className="login-eyebrow">Service operations workspace</p>
           <h1>Every visit, clearly recorded.</h1>
-          <p>Capture service work, customer sign-off, and ready-to-share reports in one connected workspace.</p>
+          <p>Capture item condition, storage context, photo evidence, and ready-to-share reports in one connected workspace.</p>
           <div className="login-story-lines"><span>Service notes</span><span>Customer records</span><span>Signed reports</span></div>
         </div>
         <p className="login-story-footer">Structured records for teams that keep work moving.</p>
@@ -85,4 +85,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

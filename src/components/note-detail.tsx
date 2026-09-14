@@ -16,6 +16,8 @@ import {
 } from "@/lib/domain";
 import { ReportActions } from "./service-report";
 import "./report.css";
+import { buildReportViewModel } from "@/lib/report-model";
+import { EvidenceReportView } from "./evidence-report-view";
 
 type NoteDetailProps = {
   note: ServiceNote;
@@ -61,6 +63,10 @@ export function NoteDetail({
   organization,
   field = false,
 }: NoteDetailProps) {
+  if (note.schema_version === 2) {
+    const model = buildReportViewModel(note, organization);
+    if (model.kind === "EVIDENCE_REPORT") return <div className="note-detail-page"><header className="page-header"><div><p className="eyebrow">Completed evidence report</p><div className="report-title-line"><h1 className="page-title">{model.number}</h1><span className="badge badge-success"><CheckCircle2 size={13} /> Completed</span></div><p className="muted">{model.item.description}</p></div><ReportActions note={note} organization={organization} field={field} context="detail" /></header><EvidenceReportView model={model} /></div>;
+  }
   return (
     <div className="note-detail-page">
       <header className="page-header">

@@ -9,7 +9,9 @@ import {
   formatCurrency,
   isCompletedRecord,
   searchableNoteText,
+  evidenceAcknowledgementStatement,
 } from "../src/lib/domain";
+import { buildReportViewModel } from "../src/lib/report-model";
 import type { ServiceNote, Profile, Customer } from "../src/lib/types";
 describe("financial rules", () => {
   it("calculates rounded lines then discount and tax", () => {
@@ -196,6 +198,195 @@ describe("completion", () => {
     expect(completionErrors(inspection)).toEqual([]);
   });
 });
+
+describe("evidence report v2", () => {
+  const evidence = {
+    ...createEvidenceReportFixture(),
+  } as ServiceNote;
+
+  it("requires the evidence fields and at least one stored original photo", () => {
+    const errors = completionErrors({
+      ...evidence,
+      customer_name_snapshot: "",
+      contact_number_snapshot: "",
+      item_name_snapshot: "",
+      quantity: "0",
+      location_snapshot: "",
+      condition_code: "",
+      photos: [],
+    });
+
+    expect(errors.join("\n")).toMatch(/customer/i);
+    expect(errors.join("\n")).toMatch(/contact number/i);
+    expect(errors.join("\n")).toMatch(/item description/i);
+    expect(errors.join("\n")).toMatch(/quantity/i);
+    expect(errors.join("\n")).toMatch(/location/i);
+    expect(errors.join("\n")).toMatch(/condition/i);
+    expect(errors.join("\n")).toMatch(/evidence photo/i);
+  });
+
+  it("requires remarks for every condition except no visible issue", () => {
+    expect(
+      completionErrors({
+        ...evidence,
+        condition_code: "DAMAGED",
+        condition_remarks: "",
+      }).join(" "),
+    ).toMatch(/condition remarks/i);
+    expect(
+      completionErrors({
+        ...evidence,
+        condition_code: "NO_VISIBLE_ISSUE",
+        condition_remarks: "",
+      }),
+    ).toEqual([]);
+  });
+
+  it("requires currency only when a declared value is entered", () => {
+    expect(
+      completionErrors({
+        ...evidence,
+        declared_total_value: "1200",
+        declared_currency: "",
+      }).join(" "),
+    ).toMatch(/currency/i);
+    expect(
+      completionErrors({
+        ...evidence,
+        declared_total_value: "",
+        declared_currency: "",
+      }),
+    ).toEqual([]);
+  });
+
+  it("accepts no acknowledgement but rejects a partial acknowledgement", () => {
+    expect(completionErrors({ ...evidence, signature: null })).toEqual([]);
+    expect(
+      completionErrors({
+        ...evidence,
+        acknowledgement_enabled: true,
+        signer_name_draft: "",
+        signature: null,
+      }).join(" "),
+    ).toMatch(/signer name.*signature/i);
+    expect(
+      completionErrors({
+        ...evidence,
+        signer_name_draft: "Lee",
+        signature: null,
+      }).join(" "),
+    ).toMatch(/signature/i);
+  });
+
+  it("builds the single authoritative evidence report projection", () => {
+    const model = buildReportViewModel(evidence, {
+      id: "org",
+      name: "Current Organization Name",
+      email: "current@example.com",
+      phone: "123",
+      address: "Current address",
+      currency: "MYR",
+      timezone: "Asia/Kuala_Lumpur",
+    });
+
+    expect(model.kind).toBe("EVIDENCE_REPORT");
+    if (model.kind !== "EVIDENCE_REPORT") throw new Error("Expected evidence projection");
+    expect(model.organization.name).toBe("Stored Organization");
+    expect(model.item.description).toBe("Hydraulic pump assembly");
+    expect(model.condition.label).toBe("No visible issue");
+    expect(model.sections).not.toContain("service");
+    expect(model.acknowledgement).toBeNull();
+  });
+
+  it("uses evidence wording rather than service acceptance wording", () => {
+    expect(evidenceAcknowledgementStatement).toMatch(/item.*condition/i);
+    expect(evidenceAcknowledgementStatement).not.toMatch(/service.*performed/i);
+  });
+});
+
+function createEvidenceReportFixture() {
+  return {
+    id: "report-1",
+    organization_id: "org",
+    service_number: "SL-2026-000201",
+    schema_version: 2,
+    status: "DRAFT",
+    revision: 0,
+    customer_id: "customer-1",
+    customer_name_snapshot: "Atlas Warehousing",
+    contact_number_snapshot: "+60 12 300 4000",
+    contact_name_snapshot: "Aminah",
+    contact_email_snapshot: "ops@atlas.example",
+    customer_address_snapshot: "Shah Alam",
+    item_name_snapshot: "Hydraulic pump assembly",
+    item_reference_snapshot: "HP-2048",
+    quantity: "1",
+    brand: "Bosch Rexroth",
+    model: "A10VSO",
+    invoice_number: "INV-100",
+    delivery_number: "DO-200",
+    declared_total_value: "",
+    declared_currency: "",
+    location_snapshot: "Receiving Bay 2",
+    condition_code: "NO_VISIBLE_ISSUE",
+    condition_remarks: "",
+    additional_notes: "",
+    organization_name_snapshot: "Stored Organization",
+    organization_email_snapshot: "stored@example.com",
+    organization_phone_snapshot: "456",
+    organization_address_snapshot: "Stored address",
+    organization_timezone_snapshot: "Asia/Kuala_Lumpur",
+    person_in_charge_id: "employee-1",
+    person_in_charge_name_snapshot: "Nur Aisyah",
+    person_in_charge_job_title_snapshot: "Warehouse Executive",
+    person_in_charge_employee_id_snapshot: "EMP-1",
+    photos: [
+      {
+        id: "photo-1",
+        url: "/api/report-photos/photo-1/derivative",
+        original_url: "/api/report-photos/photo-1/original",
+        original_sha256: "a".repeat(64),
+        source: "CAMERA_CAPTURE",
+        category: "OTHER",
+        caption: "Front view",
+        created_at: "2026-09-13T10:00:00Z",
+        uploaded_by_name_snapshot: "Nur Aisyah",
+        name: "pump.jpg",
+      },
+    ],
+    signature: null,
+    signer_name_draft: "",
+    acknowledgement_text_snapshot: "",
+    job_title: "",
+    job_description: "",
+    work_performed: "",
+    result_remarks: "",
+    service_date: "",
+    service_time: "",
+    contact_position_snapshot: "",
+    contact_mobile_snapshot: "",
+    contact_office_snapshot: "",
+    payment_status: "UNPAID",
+    payment_method: "",
+    payment_terms: "",
+    payment_reference: "",
+    payment_remarks: "",
+    labor: [],
+    materials: [],
+    charges: [],
+    labor_total: "0.00",
+    material_total: "0.00",
+    additional_charge_total: "0.00",
+    subtotal: "0.00",
+    discount_amount: "0.00",
+    tax_rate: "0",
+    tax_amount: "0.00",
+    grand_total: "0.00",
+    created_at: "2026-09-13T09:30:00Z",
+    updated_at: "2026-09-13T10:00:00Z",
+    completed_at: null,
+  };
+}
 
 it("indexes item references and narrative evidence for retrieval", () => {
   const note = {

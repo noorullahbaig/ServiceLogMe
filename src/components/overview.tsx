@@ -5,12 +5,12 @@ import {
   FilePlus2,
   FilePenLine,
   FileCheck2,
-  Wallet,
+  Camera,
   ArrowUpRight,
 } from "lucide-react";
 import { NotesTable, NoteBadge } from "./notes-table";
 import type { WorkspaceData } from "@/lib/types";
-import { shortDate, money } from "@/lib/domain";
+import { shortDate } from "@/lib/domain";
 export function Overview({ data }: { data: WorkspaceData }) {
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: data.organization.timezone,
@@ -24,7 +24,7 @@ export function Overview({ data }: { data: WorkspaceData }) {
             timeZone: data.organization.timezone,
           }).format(new Date(n.created_at)) === today,
       ).length,
-      caption: "Service Notes created today",
+      caption: "Evidence reports created today",
       icon: FilePlus2,
       href: `/service-notes?createdFrom=${today}&createdTo=${today}`,
     },
@@ -38,16 +38,16 @@ export function Overview({ data }: { data: WorkspaceData }) {
     {
       label: "Completed",
       value: data.notes.filter((n) => n.status === "COMPLETED").length,
-      caption: "Signed and securely recorded",
+      caption: "Submitted and read-only",
       icon: FileCheck2,
       href: "/service-notes?status=COMPLETED",
     },
     {
-      label: "Unpaid",
-      value: data.notes.filter((n) => n.payment_status === "UNPAID").length,
-      caption: "Service Notes with payment due",
-      icon: Wallet,
-      href: "/service-notes?payment=UNPAID",
+      label: "Evidence photos",
+      value: data.notes.reduce((total, note) => total + note.photos.length, 0),
+      caption: "Photos attached to reports",
+      icon: Camera,
+      href: "/service-notes",
     },
   ];
   return (
@@ -56,12 +56,12 @@ export function Overview({ data }: { data: WorkspaceData }) {
         <div>
           <h1 className="page-title">Overview</h1>
           <p className="page-subtitle">
-            A clear view of your service operations.
+            A clear view of warehouse evidence and item condition.
           </p>
         </div>
         <Link href="/service-notes/new" className="btn btn-primary">
           <Plus />
-          New Service Note
+          Create Report
         </Link>
       </div>
       <div className="metric-grid">
@@ -70,7 +70,7 @@ export function Overview({ data }: { data: WorkspaceData }) {
             className="metric"
             href={m.href}
             key={m.label}
-            aria-label={`View ${m.label.toLowerCase()} Service Notes`}
+            aria-label={`View ${m.label.toLowerCase()} Reports`}
           >
             <div className="metric-top">
               <span>{m.label}</span>
@@ -86,11 +86,11 @@ export function Overview({ data }: { data: WorkspaceData }) {
       <section className="overview-surface">
         <div className="surface-heading">
           <div>
-            <h2>Recent Service Notes</h2>
-            <p>Your latest service records, all in one place.</p>
+            <h2>Recent Reports</h2>
+            <p>Your latest warehouse evidence records.</p>
           </div>
           <Link className="surface-link" href="/service-notes">
-            View all notes
+            View all reports
             <ArrowUpRight />
           </Link>
         </div>
@@ -145,16 +145,15 @@ export function Overview({ data }: { data: WorkspaceData }) {
           ) : (
             <p className="activity-empty">
               New activity will appear here as your team creates and completes
-              Service Notes.
+              Reports.
             </p>
           )}
         </section>
         <aside className="workspace-note">
-          <span className="eyebrow">Built for the field</span>
-          <h3>Your workspace, wherever service takes you.</h3>
+          <span className="eyebrow">Built for warehouse teams</span>
+          <h3>Evidence at the point of receipt.</h3>
           <p>
-            Create notes, add photos, and collect customer signatures from your
-            phone.
+            Record an item, its storage location and visible condition from your phone.
           </p>
           <Link href="/field">
             Open field workspace
@@ -194,11 +193,11 @@ export function FieldHome({ data }: { data: WorkspaceData }) {
         href="/field/service-notes/new"
       >
         <Plus />
-        New Service Note
+        Create Report
       </Link>
       {[
         { label: "Drafts", rows: drafts },
-        { label: "Recent Service Notes", rows: completed },
+        { label: "Recent Reports", rows: completed },
       ].map((section) => (
         <section className="field-section" key={section.label}>
           <div className="field-section-header">
@@ -230,11 +229,11 @@ export function FieldHome({ data }: { data: WorkspaceData }) {
                   <span className="mono">{n.service_number}</span>
                   <NoteBadge value={n.status} />
                 </div>
-                <h3>{n.job_title || "Untitled Service Note"}</h3>
+                <h3>{n.item_name_snapshot || "Item not described"}</h3>
                 <p>{n.customer_name_snapshot || "Customer not selected"}</p>
                 <div className="field-note-foot">
-                  <span>{shortDate(n.service_date)}</span>
-                  <strong>{money(n.grand_total)}</strong>
+                  <span>{shortDate(n.created_at)}</span>
+                  <strong>{n.location_snapshot || "Location pending"}</strong>
                 </div>
               </Link>
             ))
@@ -242,8 +241,8 @@ export function FieldHome({ data }: { data: WorkspaceData }) {
             <div className="field-note">
               <p className="muted" style={{ fontSize: 12, lineHeight: 1.8 }}>
                 {section.label === "Drafts"
-                  ? "You have no draft Service Notes."
-                  : "Your completed Service Notes will appear here."}
+                  ? "You have no draft Reports."
+                  : "Your completed Reports will appear here."}
               </p>
             </div>
           )}

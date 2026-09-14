@@ -21,6 +21,15 @@ function decimal(value: string, label: string) {
 const round = (n: Decimal) => n.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 export const acceptanceStatement =
   "I confirm that the service described above has been performed and acknowledge the information recorded in this Service Note.";
+export const evidenceAcknowledgementStatement =
+  "I acknowledge that the item, information and condition shown in this report reflect what was recorded at the stated time.";
+export const conditionLabels = {
+  NO_VISIBLE_ISSUE: "No visible issue",
+  EXISTING_WEAR_DAMAGE: "Existing wear / damage",
+  DAMAGED: "Damaged",
+  UNABLE_TO_FULLY_INSPECT: "Unable to fully inspect",
+  OTHER: "Other",
+} as const;
 export function calculateLineAmount(quantity: string, rate: string) {
   return round(
     decimal(quantity, "Quantity").times(decimal(rate, "Rate")),
@@ -107,11 +116,14 @@ export function requiresCustomerAcknowledgement(
 ) {
   return n.finalization_type !== "STAFF_ATTESTED";
 }
-export function searchableNoteText(n: Pick<ServiceNote, "service_number" | "item_name_snapshot" | "item_reference_snapshot" | "job_title" | "job_description" | "work_performed" | "result_remarks" | "additional_notes" | "customer_name_snapshot" | "person_in_charge_name_snapshot" | "photos">) {
+export function searchableNoteText(n: Pick<ServiceNote, "service_number" | "item_name_snapshot" | "item_reference_snapshot" | "invoice_number" | "delivery_number" | "contact_number_snapshot" | "job_title" | "job_description" | "work_performed" | "result_remarks" | "additional_notes" | "customer_name_snapshot" | "person_in_charge_name_snapshot" | "photos">) {
   return [
     n.service_number,
     n.item_name_snapshot,
     n.item_reference_snapshot,
+    n.invoice_number,
+    n.delivery_number,
+    n.contact_number_snapshot,
     n.customer_name_snapshot,
     n.person_in_charge_name_snapshot,
     n.job_title,
@@ -125,7 +137,75 @@ export function searchableNoteText(n: Pick<ServiceNote, "service_number" | "item
     .join(" ")
     .toLowerCase();
 }
+function evidenceCompletionReadiness(n: ServiceNote): CompletionReadiness {
+  const customer: string[] = [],
+    item: string[] = [],
+    condition: string[] = [],
+    photos: string[] = [],
+    acceptance: string[] = [];
+  if (!n.customer_name_snapshot?.trim())
+    customer.push("Customer / company name is required before submitting this Report.");
+  if (!n.contact_number_snapshot?.trim())
+    customer.push("Contact number is required before submitting this Report.");
+  if (!n.item_name_snapshot?.trim())
+    item.push("Item description is required before submitting this Report.");
+  try {
+    const quantity = decimal(n.quantity || "", "Quantity");
+    if (quantity.lte(0)) item.push("Quantity must be greater than zero.");
+  } catch {
+    item.push("Enter a valid quantity greater than zero.");
+  }
+  if (n.declared_total_value?.trim()) {
+    try {
+      const value = decimal(n.declared_total_value, "Total value");
+      if (value.lte(0)) item.push("Total value must be greater than zero.");
+    } catch {
+      item.push("Enter a valid total value greater than zero.");
+    }
+    if (!/^[A-Z]{3}$/.test(n.declared_currency || ""))
+      item.push("Currency is required when total value is entered.");
+  }
+  if (!n.location_snapshot?.trim())
+    condition.push("Location is required before submitting this Report.");
+  if (!n.condition_code || !(n.condition_code in conditionLabels))
+    condition.push("Condition is required before submitting this Report.");
+  else if (
+    n.condition_code !== "NO_VISIBLE_ISSUE" &&
+    !n.condition_remarks?.trim()
+  )
+    condition.push("Condition remarks are required for the selected condition.");
+  if (
+    !n.photos.some(
+      (photo) =>
+        Boolean(photo.original_url) &&
+        /^[a-f0-9]{64}$/i.test(photo.original_sha256 || ""),
+    )
+  )
+    photos.push("At least one stored evidence photo is required before submitting this Report.");
+  const signerStarted = Boolean(
+    n.acknowledgement_enabled || n.signer_name_draft?.trim() || n.signature?.signer_name?.trim() || n.signature,
+  );
+  if (signerStarted && !n.signature?.signer_name?.trim())
+    acceptance.push("Signer name is required when acknowledgement is included.");
+  if (signerStarted && !isValidSignature(n))
+    acceptance.push("A signature is required when acknowledgement is included.");
+  const requirements = [
+    { id: "customer" as const, label: "Customer", step: 0, fieldId: "customer", errors: customer },
+    { id: "item" as const, label: "Item", step: 2, fieldId: "item_name_snapshot", errors: item },
+    { id: "condition" as const, label: "Location & condition", step: 3, fieldId: "location_snapshot", errors: condition },
+    { id: "photos" as const, label: "Photos", step: 4, fieldId: "evidence-photos", errors: photos },
+    { id: "acceptance" as const, label: "Acknowledgement", step: 6, fieldId: "acceptance", errors: acceptance },
+  ].map((requirement) => ({ ...requirement, complete: requirement.errors.length === 0 }));
+  const firstIncomplete = requirements.find((requirement) => !requirement.complete) ?? null;
+  return {
+    ready: firstIncomplete === null,
+    requirements,
+    firstIncomplete,
+    errors: requirements.flatMap((requirement) => requirement.errors),
+  };
+}
 export function completionReadiness(n: ServiceNote): CompletionReadiness {
+  if (n.schema_version === 2) return evidenceCompletionReadiness(n);
   const service: string[] = [],
     customer: string[] = [],
     work: string[] = [],
@@ -227,6 +307,7 @@ export function completionErrors(n: ServiceNote) {
   return completionReadiness(n).errors;
 }
 export function isCompletedRecord(n: ServiceNote) {
+  if (n.schema_version === 2) return n.status === "COMPLETED";
   return n.status === "COMPLETED" &&
     (n.finalization_type === "STAFF_ATTESTED" || isValidSignature(n));
 }
@@ -241,6 +322,7 @@ export function customerSnapshot(c: Customer) {
   return {
     customer_id: c.id,
     customer_name_snapshot: c.name,
+    contact_number_snapshot: c.contact_number || c.mobile || c.office || "",
     contact_name_snapshot: c.contact_name,
     contact_position_snapshot: c.contact_position || "",
     contact_mobile_snapshot: c.mobile || "",

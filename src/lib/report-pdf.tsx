@@ -15,6 +15,10 @@ import {
   calculateLineAmount,
   formatCurrency,
 } from "./domain";
+import {
+  buildReportViewModel,
+  type EvidenceReportViewModel,
+} from "./report-model";
 
 type ReportDocumentProps = { note: ServiceNote; organization: Organization };
 
@@ -270,7 +274,180 @@ function Narrative({ title, children }: { title: string; children: string }) {
   );
 }
 
+function EvidenceReportDocument({ model }: { model: EvidenceReportViewModel }) {
+  const optional = (label: string, value: string) =>
+    value ? (
+      <View style={styles.infoRow}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value}</Text>
+      </View>
+    ) : null;
+  return (
+    <Document
+      title={`Evidence Report ${model.number}`}
+      author={model.organization.name}
+      subject={model.item.description}
+      creator="ServiceLOGME"
+    >
+      <Page size="A4" style={styles.page} wrap>
+        <View style={styles.header}>
+          <View style={styles.brand}>
+            <Text style={styles.brandName}>{model.organization.name}</Text>
+            {model.organization.address && (
+              <Text style={styles.brandLine}>{model.organization.address}</Text>
+            )}
+            <Text style={styles.brandLine}>
+              {[model.organization.phone, model.organization.email]
+                .filter(Boolean)
+                .join(" | ")}
+            </Text>
+          </View>
+          <View style={styles.identity}>
+            <Text style={styles.overline}>Evidence report</Text>
+            <Text style={styles.serviceNumber}>{model.number}</Text>
+          </View>
+        </View>
+        <View style={styles.meta} wrap={false}>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Created</Text>
+            <Text style={styles.metaValue}>{date(model.createdAt, true)}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Submitted</Text>
+            <Text style={styles.metaValue}>
+              {date(model.completedAt || "", true)}
+            </Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Person in charge</Text>
+            <Text style={styles.metaValue}>{model.employee.name}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Employee ID</Text>
+            <Text style={styles.metaValue}>{model.employee.employeeId}</Text>
+          </View>
+        </View>
+        <View style={styles.twoColumn} wrap={false}>
+          <View style={styles.column}>
+            <Text style={styles.overline}>Customer</Text>
+            <Text style={styles.blockTitle}>{model.customer.name}</Text>
+            {optional("Telephone", model.customer.contactNumber)}
+            {optional("Contact", model.customer.contactPerson)}
+            {optional("Email", model.customer.email)}
+            {optional("Address", model.customer.address)}
+          </View>
+          <View style={styles.column}>
+            <Text style={styles.overline}>References</Text>
+            {optional("Invoice", model.references.invoiceNumber)}
+            {optional("Delivery", model.references.deliveryNumber)}
+            {optional("Item ID", model.item.identifier)}
+          </View>
+        </View>
+        <View style={styles.section}>
+          <SectionHeading number="01">Item</SectionHeading>
+          <Text style={styles.blockTitle}>{model.item.description}</Text>
+          {optional("Quantity", model.item.quantity)}
+          {optional("Brand", model.item.brand)}
+          {optional("Model", model.item.model)}
+          {model.item.totalValue &&
+            optional(
+              "Value",
+              formatCurrency(model.item.totalValue, model.item.currency),
+            )}
+        </View>
+        <View style={styles.twoColumn} wrap={false}>
+          <View style={styles.column}>
+            <Text style={styles.overline}>Storage location</Text>
+            <Text style={styles.blockTitle}>{model.location}</Text>
+          </View>
+          <View style={styles.column}>
+            <Text style={styles.overline}>Recorded condition</Text>
+            <Text style={styles.blockTitle}>{model.condition.label}</Text>
+            {model.condition.remarks && (
+              <Text style={styles.narrativeText}>
+                {model.condition.remarks}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.section}>
+          <SectionHeading number="02">Photo evidence</SectionHeading>
+          <View style={styles.photoGrid}>
+            {model.photos.map((photo, index) => (
+              <View key={photo.id} style={styles.photoCard} wrap={false}>
+                <Image src={photo.url} style={styles.photoImage} />
+                <View style={styles.photoCaption}>
+                  <Text style={styles.photoName}>
+                    {photo.caption || `Evidence photo ${index + 1}`}
+                  </Text>
+                  <Text style={styles.photoDate}>
+                    Uploaded {date(photo.created_at, true)}
+                    {photo.uploaded_by_name_snapshot
+                      ? ` | ${photo.uploaded_by_name_snapshot}`
+                      : ""}
+                  </Text>
+                  {photo.gps_latitude != null &&
+                    photo.gps_longitude != null && (
+                      <Text style={styles.photoDate}>
+                        GPS context: {photo.gps_latitude.toFixed(6)},{" "}
+                        {photo.gps_longitude.toFixed(6)}
+                      </Text>
+                    )}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+        {model.notes && (
+          <View style={styles.section}>
+            <SectionHeading number="03">Additional notes</SectionHeading>
+            <Text style={styles.narrativeText}>{model.notes}</Text>
+          </View>
+        )}
+        {model.acknowledgement && (
+          <View style={styles.section} wrap={false}>
+            <SectionHeading number="04">
+              Customer acknowledgement
+            </SectionHeading>
+            <View style={styles.acceptance}>
+              <Text style={styles.acceptanceCopy}>
+                {model.acknowledgement.statement}
+              </Text>
+              <View style={styles.signatureRow}>
+                <Image
+                  src={model.acknowledgement.image}
+                  style={styles.signatureImage}
+                />
+                <View style={styles.signatureMeta}>
+                  <Text style={styles.signerName}>
+                    {model.acknowledgement.signerName}
+                  </Text>
+                  <Text style={styles.signerSub}>
+                    Signed {date(model.acknowledgement.signedAt, true)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+        <View style={styles.footer} fixed>
+          <Text>{model.organization.name}</Text>
+          <Text>{model.number}</Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Page ${pageNumber} of ${totalPages}`
+            }
+          />
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
 export function ReportDocument({ note, organization }: ReportDocumentProps) {
+  const model = buildReportViewModel(note, organization);
+  if (model.kind === "EVIDENCE_REPORT")
+    return <EvidenceReportDocument model={model} />;
   return (
     <Document
       title={`Service Report ${note.service_number}`}
