@@ -772,6 +772,34 @@ async function replaceChildren(
   return statements;
 }
 
+// Compute a deterministic hash of watermark-relevant context
+// This ensures derivatives are only reused when they match the current report state
+function derivativeContextHash(
+  reportNumber: string,
+  uploadedAt: string,
+  employeeName: string,
+  location: string,
+  gpsLatitude: number | null,
+  gpsLongitude: number | null,
+): string {
+  const context = JSON.stringify({
+    reportNumber,
+    uploadedAt,
+    employeeName,
+    location,
+    gps: gpsLatitude != null && gpsLongitude != null
+      ? { lat: gpsLatitude, lng: gpsLongitude }
+      : null,
+  });
+  // Simple deterministic hash (for integrity, not security)
+  let hash = 0;
+  for (let i = 0; i < context.length; i++) {
+    hash = ((hash << 5) - hash) + context.charCodeAt(i);
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash.toString(16);
+}
+
 async function finalizeEvidencePhotos(
   report: ServiceNote,
   env: ExtendedEnv,
@@ -784,6 +812,11 @@ async function finalizeEvidencePhotos(
     report.organization_id,
   );
   if (!rows.length) return;
+  
+  const location = report.location_snapshot || "Location not recorded";
+  const employeeName = report.person_in_charge_name_snapshot;
+  const reportNumber = report.service_number;
+  
   for (const row of rows) {
     const original = await env.REPORT_MEDIA.get(text(row.original_object_key));
     if (!original || !/^[a-f0-9]{64}$/i.test(text(row.original_sha256)))
@@ -795,26 +828,48 @@ async function finalizeEvidencePhotos(
         }),
         { status: 422, headers: { "content-type": "application/json" } },
       );
-    if (text(row.derivative_object_key)) {
-      if (await env.REPORT_MEDIA.head(text(row.derivative_object_key)))
-        continue;
-    }
-    const location = report.location_snapshot || "Location not recorded";
+    
     const uploaded = new Intl.DateTimeFormat("en-MY", {
       dateStyle: "medium",
       timeStyle: "short",
       timeZone: report.organization_timezone_snapshot || "UTC",
     }).format(new Date(text(row.server_uploaded_at)));
+    
+    // Compute context hash for this derivative
+    const contextHash = derivativeContextHash(
+      reportNumber,
+      uploaded,
+      employeeName,
+      location,
+      row.gps_latitude != null ? num(row.gps_latitude) : null,
+      row.gps_longitude != null ? num(row.gps_longitude) : null,
+    );
+    
+    // Check if existing derivative matches current watermark context
+    const existingDerivativeKey = text(row.derivative_object_key);
+    if (existingDerivativeKey) {
+      // Derivative key encodes context hash to ensure integrity
+      if (existingDerivativeKey.includes(`-${contextHash}.jpg`)) {
+        if (await env.REPORT_MEDIA.head(existingDerivativeKey)) {
+          // Derivative exists and matches current context - reuse it
+          continue;
+        }
+      }
+      // Stale derivative exists - will be replaced
+    }
+    
     const derivative = await processor.createDerivative(original.body, {
-      reportNumber: report.service_number,
+      reportNumber,
       uploadedAt: uploaded,
-      employeeName: report.person_in_charge_name_snapshot,
+      employeeName,
       location,
       ...(row.gps_latitude != null && row.gps_longitude != null
         ? { gps: { latitude: num(row.gps_latitude), longitude: num(row.gps_longitude) } }
         : {}),
     });
-    const derivativeKey = `reports/${report.organization_id}/${report.id}/derivatives/${text(row.id)}.jpg`;
+    
+    // Include context hash in derivative key to prevent stale reuse
+    const derivativeKey = `reports/${report.organization_id}/${report.id}/derivatives/${text(row.id)}-${contextHash}.jpg`;
     await env.REPORT_MEDIA.put(derivativeKey, derivative.bytes, {
       sha256: derivative.sha256,
       httpMetadata: { contentType: derivative.contentType },
@@ -1048,20 +1103,65 @@ async function saveEvidenceNote(
   statements.push(
     ...(await replaceChildren(signatureInput, profile, user, env)),
   );
-  statements.push(
-    env.DB.prepare(
-      "INSERT INTO audit_events (id, organization_id, note_id, service_number, actor_name, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(
-      id(),
-      profile.organization_id,
+  
+  // Execute the update statements first
+  const batchResults = await env.DB.batch(statements);
+  
+  // The main UPDATE statement is at index captionStatements.length
+  const updateResult = batchResults[captionStatements.length];
+  
+  // Verify the UPDATE actually modified the row
+  // If rowsWritten is 0, the WHERE clause didn't match (revision conflict or already completed)
+  if (!updateResult || (updateResult.meta?.changes ?? 0) === 0) {
+    // Re-fetch to determine what happened
+    const currentState = await one(
+      env.DB,
+      "SELECT status, revision FROM service_notes WHERE id = ? AND organization_id = ?",
       updated.id,
-      updated.service_number,
-      profile.full_name,
-      complete ? "SERVICE_NOTE_COMPLETED" : "SERVICE_NOTE_UPDATED",
-      updated.updated_at,
-    ),
-  );
-  await env.DB.batch(statements);
+      profile.organization_id,
+    );
+    
+    if (!currentState) {
+      throw new Error("Report disappeared during save");
+    }
+    
+    if (text(currentState.status) === "COMPLETED" && complete) {
+      // Already completed - return current state (idempotent)
+      const saved = await one(
+        env.DB,
+        "SELECT * FROM service_notes WHERE id = ? AND organization_id = ?",
+        updated.id,
+        profile.organization_id,
+      );
+      if (!saved) throw new Error("Could not retrieve Report");
+      return noteFromRow(saved, env.DB);
+    }
+    
+    // Revision conflict
+    throw new Response(
+      JSON.stringify({
+        code: "REVISION_CONFLICT",
+        message:
+          "This Report changed while being saved. Reload and try again.",
+        currentRevision: num(currentState.revision),
+      }),
+      { status: 409, headers: { "content-type": "application/json" } },
+    );
+  }
+  
+  // UPDATE succeeded - now insert the audit event
+  await env.DB.prepare(
+    "INSERT INTO audit_events (id, organization_id, note_id, service_number, actor_name, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(
+    id(),
+    profile.organization_id,
+    updated.id,
+    updated.service_number,
+    profile.full_name,
+    complete ? "SERVICE_NOTE_COMPLETED" : "SERVICE_NOTE_UPDATED",
+    updated.updated_at,
+  ).run();
+  
   const saved = await one(
     env.DB,
     "SELECT * FROM service_notes WHERE id = ? AND organization_id = ?",

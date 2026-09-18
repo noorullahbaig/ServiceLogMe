@@ -1,22 +1,20 @@
 PRAGMA foreign_keys = ON;
 
--- The previous records were development/service-oriented data and are intentionally
--- retired as part of the approved evidence-report cutover. Identity and auth remain.
-DELETE FROM audit_events;
-DELETE FROM signatures;
-DELETE FROM photos;
-DELETE FROM charges;
-DELETE FROM material_items;
-DELETE FROM labor_items;
-DELETE FROM service_notes;
-DELETE FROM tracked_items;
-DELETE FROM customers;
-DELETE FROM stored_files;
-
+-- Add contact_number to customers table (for v2 reports)
 ALTER TABLE customers ADD COLUMN contact_number TEXT NOT NULL DEFAULT '';
 
+-- Backfill contact_number from legacy mobile/office fields
+-- Priority: mobile first, then office, otherwise empty
+UPDATE customers
+SET contact_number = COALESCE(NULLIF(TRIM(mobile), ''), NULLIF(TRIM(office), ''), '');
+
+-- Add schema_version column to service_notes
+-- Existing records default to version 1 (legacy)
+-- New records will explicitly set version 2 (evidence reports)
 ALTER TABLE service_notes ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1
   CHECK (schema_version IN (1, 2));
+-- Add v2-specific columns to service_notes
+-- These are only used when schema_version = 2
 ALTER TABLE service_notes ADD COLUMN contact_number_snapshot TEXT NOT NULL DEFAULT '';
 ALTER TABLE service_notes ADD COLUMN invoice_number TEXT NOT NULL DEFAULT '';
 ALTER TABLE service_notes ADD COLUMN delivery_number TEXT NOT NULL DEFAULT '';
@@ -37,6 +35,8 @@ ALTER TABLE service_notes ADD COLUMN acknowledgement_text_snapshot TEXT NOT NULL
 ALTER TABLE service_notes ADD COLUMN acknowledgement_enabled INTEGER NOT NULL DEFAULT 0
   CHECK (acknowledgement_enabled IN (0, 1));
 
+-- Create evidence photo table for v2 reports
+-- Stores original photos in R2 with SHA-256 validation
 CREATE TABLE IF NOT EXISTS report_photo_evidence (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS report_photo_evidence (
   position INTEGER NOT NULL DEFAULT 0
 );
 
+-- Indexes for v2 report queries
 CREATE INDEX IF NOT EXISTS idx_report_photo_evidence_report
   ON report_photo_evidence(organization_id, report_id, position);
 CREATE INDEX IF NOT EXISTS idx_reports_created
@@ -77,6 +78,8 @@ CREATE INDEX IF NOT EXISTS idx_reports_delivery
 CREATE INDEX IF NOT EXISTS idx_reports_item_reference
   ON service_notes(organization_id, item_reference_snapshot);
 
+-- Full-text search for v2 reports only
+-- FTS5 virtual table for fast text search across key fields
 CREATE VIRTUAL TABLE IF NOT EXISTS report_search USING fts5(
   report_id UNINDEXED,
   organization_id UNINDEXED,
@@ -90,6 +93,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS report_search USING fts5(
   tokenize = 'unicode61'
 );
 
+-- FTS triggers - only index v2 reports
+-- v1 reports remain searchable through standard SQL queries
 CREATE TRIGGER IF NOT EXISTS report_search_insert AFTER INSERT ON service_notes
 WHEN NEW.schema_version = 2
 BEGIN
@@ -97,6 +102,7 @@ BEGIN
     NEW.customer_name_snapshot, NEW.contact_number_snapshot, NEW.item_name_snapshot,
     NEW.item_reference_snapshot, NEW.invoice_number, NEW.delivery_number);
 END;
+
 CREATE TRIGGER IF NOT EXISTS report_search_update AFTER UPDATE ON service_notes
 WHEN NEW.schema_version = 2
 BEGIN
@@ -105,6 +111,7 @@ BEGIN
     NEW.customer_name_snapshot, NEW.contact_number_snapshot, NEW.item_name_snapshot,
     NEW.item_reference_snapshot, NEW.invoice_number, NEW.delivery_number);
 END;
+
 CREATE TRIGGER IF NOT EXISTS report_search_delete AFTER DELETE ON service_notes
 BEGIN
   DELETE FROM report_search WHERE report_id = OLD.id;

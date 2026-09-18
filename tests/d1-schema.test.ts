@@ -43,7 +43,7 @@ describe("D1 schema", () => {
     expect(evidenceSql).toContain("schema_version");
     expect(evidenceSql).toContain("condition_code");
     expect(evidenceSql).toContain("original_sha256");
-    expect(evidenceSql).toContain("DELETE FROM service_notes");
+    expect(evidenceSql).toContain("contact_number");
     expect(evidenceSql).toContain("report_photo_evidence_update_guard");
     expect(evidenceSql).toContain("CREATE VIRTUAL TABLE IF NOT EXISTS report_search USING fts5");
     expect(sql).toContain("PRAGMA foreign_keys = ON");

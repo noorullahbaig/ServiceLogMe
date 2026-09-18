@@ -51,6 +51,7 @@ export default function EvidenceReportEditor({
   note,
   customers,
   organization,
+  field = false,
   onSave,
   onComplete,
   onCreateCustomer,
@@ -59,6 +60,7 @@ export default function EvidenceReportEditor({
   onDone,
 }: Props) {
   const [draft, setDraft] = useState(note);
+  const [step, setStep] = useState(0);
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving">(
     "saved",
   );
@@ -86,6 +88,8 @@ export default function EvidenceReportEditor({
   const current = useRef(draft);
   const cameraInput = useRef<HTMLInputElement>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const editorTop = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
     current.current = draft;
   }, [draft]);
@@ -229,9 +233,26 @@ export default function EvidenceReportEditor({
     const readiness = completionReadiness(draft);
     if (!readiness.ready) {
       setValidation(readiness.errors);
-      document
-        .getElementById(`report-section-${readiness.firstIncomplete?.id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const firstIncomplete = readiness.firstIncomplete;
+      if (firstIncomplete && field) {
+        // Navigate to the first incomplete step in field mode
+        const stepMap: Record<string, number> = {
+          customer: 0,
+          references: 1,
+          item: 2,
+          condition: 3,
+          photos: 4,
+          notes: 5,
+          acceptance: 6,
+        };
+        const targetStep = stepMap[firstIncomplete.id] ?? 0;
+        setStep(targetStep);
+        editorTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        document
+          .getElementById(`report-section-${firstIncomplete?.id}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
       return;
     }
     setValidation([]);
@@ -249,6 +270,45 @@ export default function EvidenceReportEditor({
     }
   }
 
+  function moveStep(next: number) {
+    if (next === 7) {
+      // Entering Review step - validate
+      const readiness = completionReadiness(draft);
+      if (!readiness.ready) {
+        const firstIncomplete = readiness.firstIncomplete;
+        setValidation(readiness.errors);
+        if (firstIncomplete) {
+          const stepMap: Record<string, number> = {
+            customer: 0,
+            references: 1,
+            item: 2,
+            condition: 3,
+            photos: 4,
+            notes: 5,
+            acceptance: 6,
+          };
+          const targetStep = stepMap[firstIncomplete.id] ?? 0;
+          setStep(targetStep);
+          editorTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+      }
+    }
+    setStep(next);
+    editorTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const steps = [
+    "Customer",
+    "References",
+    "Item",
+    "Location & Condition",
+    "Photos",
+    "Notes",
+    "Acknowledgement",
+    "Review",
+  ];
+
   const input = (key: keyof ServiceNote) => ({
     value: String(draft[key] ?? ""),
     onChange: (
@@ -259,7 +319,7 @@ export default function EvidenceReportEditor({
   });
 
   return (
-    <div className="evidence-editor">
+    <div ref={editorTop} className="evidence-editor">
       <header className="page-header evidence-editor-header">
         <div>
           <p className="eyebrow">
@@ -272,30 +332,67 @@ export default function EvidenceReportEditor({
             condition.
           </p>
         </div>
-        <div className="evidence-editor-actions">
-          <span role="status" className="save-status">
-            {saveState === "saved"
-              ? "All changes saved"
-              : saveState === "saving"
-                ? "Saving…"
-                : "Unsaved changes"}
-          </span>
-          <button
-            className="btn btn-secondary"
-            type="button"
-            onClick={() => void saveNow()}
-          >
-            <Save /> Save draft
-          </button>
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={() => void submit()}
-          >
-            <Check /> Submit report
-          </button>
-        </div>
+        {!field && (
+          <div className="evidence-editor-actions">
+            <span role="status" className="save-status">
+              {saveState === "saved"
+                ? "All changes saved"
+                : saveState === "saving"
+                  ? "Saving…"
+                  : "Unsaved changes"}
+            </span>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => void saveNow()}
+            >
+              <Save /> Save draft
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => void submit()}
+            >
+              <Check /> Submit report
+            </button>
+          </div>
+        )}
       </header>
+      {field && (
+        <div className="field-step-header">
+          <div className="field-step-meta">
+            <span className="field-step-counter">
+              Step {step + 1} of {steps.length}
+            </span>
+            <strong className="field-step-title">{steps[step]}</strong>
+          </div>
+          <div
+            className="field-step-track"
+            role="tablist"
+            aria-label="Workflow progress"
+          >
+            {steps.map((name, index) => {
+              const isCurrent = index === step;
+              const isDone = index < step;
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className={`field-step-btn ${
+                    isCurrent ? "current" : isDone ? "done" : ""
+                  }`}
+                  aria-label={`Go to ${name}`}
+                  title={name}
+                  aria-current={isCurrent ? "step" : undefined}
+                  onClick={() => moveStep(index)}
+                >
+                  <span className="field-step-bar" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {(error || validation.length > 0) && (
         <div className="error-message" role="alert">
           <div>
@@ -313,7 +410,8 @@ export default function EvidenceReportEditor({
         </div>
       )}
       <div className="evidence-form">
-        <section id="report-section-customer" className="editor-card">
+        {(!field || step === 0) && (
+          <section id="report-section-customer" className="editor-card">
           <div className="editor-card-heading">
             <span>1</span>
             <div>
@@ -425,6 +523,8 @@ export default function EvidenceReportEditor({
             </label>
           </div>
         </section>
+        )}
+        {(!field || step === 1) && (
         <section className="editor-card">
           <div className="editor-card-heading">
             <span>2</span>
@@ -444,6 +544,8 @@ export default function EvidenceReportEditor({
             </label>
           </div>
         </section>
+        )}
+        {(!field || step === 2) && (
         <section id="report-section-item" className="editor-card">
           <div className="editor-card-heading">
             <span>3</span>
@@ -508,6 +610,8 @@ export default function EvidenceReportEditor({
             )}
           </div>
         </section>
+        )}
+        {(!field || step === 3) && (
         <section id="report-section-condition" className="editor-card">
           <div className="editor-card-heading">
             <span>4</span>
@@ -548,6 +652,8 @@ export default function EvidenceReportEditor({
             )}
           </div>
         </section>
+        )}
+        {(!field || step === 4) && (
         <section id="report-section-photos" className="editor-card">
           <div className="editor-card-heading">
             <span>5</span>
@@ -645,6 +751,8 @@ export default function EvidenceReportEditor({
             </div>
           )}
         </section>
+        )}
+        {(!field || step === 5) && (
         <section className="editor-card">
           <div className="editor-card-heading">
             <span>6</span>
@@ -662,6 +770,8 @@ export default function EvidenceReportEditor({
             />
           </label>
         </section>
+        )}
+        {(!field || step === 6) && (
         <section id="report-section-acceptance" className="editor-card">
           <div className="editor-card-heading">
             <span>7</span>
@@ -728,6 +838,8 @@ export default function EvidenceReportEditor({
             </div>
           )}
         </section>
+        )}
+        {(!field || step === 7) && (
         <section className="editor-card review-card">
           <div className="editor-card-heading">
             <span>8</span>
@@ -761,7 +873,49 @@ export default function EvidenceReportEditor({
             <Check /> Submit report
           </button>
         </section>
+        )}
       </div>
+      {field && (
+        <div className="field-footer">
+          <div className="field-footer-meta">
+            <span role="status" className="save-status">
+              {saveState === "saved"
+                ? "Saved"
+                : saveState === "saving"
+                  ? "Saving…"
+                  : "Unsaved"}
+            </span>
+          </div>
+          <div>
+            {step > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => moveStep(step - 1)}
+              >
+                Back
+              </button>
+            )}
+            {step < 7 ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => moveStep(step + 1)}
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void submit()}
+              >
+                <Check /> Submit report
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

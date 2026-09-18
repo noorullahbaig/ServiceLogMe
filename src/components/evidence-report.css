@@ -144,6 +144,91 @@
 .page-header.evidence-editor-header {
   margin-bottom: 18px;
 }
+.page-header.evidence-editor-header {
+  margin-bottom: 18px;
+}
+
+/* Field mode footer navigation */
+.evidence-editor .field-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: #fff;
+  border-top: 1px solid #e4e8ee;
+  padding: 15px 16px max(15px, env(safe-area-inset-bottom));
+  margin: 26px -16px 0;
+}
+
+.evidence-editor .field-footer > div:last-child {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.evidence-editor .field-footer .btn {
+  flex: 1;
+  justify-content: center;
+  max-width: 360px;
+}
+
+.evidence-editor .field-step-header {
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px 16px;
+  margin-bottom: 18px;
+}
+
+.evidence-editor .field-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.evidence-editor .field-step-counter {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  font-weight: 600;
+}
+
+.evidence-editor .field-step-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.evidence-editor .field-step-track {
+  display: flex;
+  gap: 4px;
+  padding: 0;
+}
+
+.evidence-editor .field-step-btn {
+  flex: 1;
+  height: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.evidence-editor .field-step-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.evidence-editor .field-step-btn.done .field-step-bar {
+  background: var(--blue);
+}
+
+.evidence-editor .field-step-btn.current .field-step-bar {
+  background: var(--blue);
+}
+
 @media (max-width: 720px) {
   .evidence-editor-header {
     align-items: stretch;
@@ -157,6 +242,7 @@
   }
   .evidence-editor-actions .btn {
     flex: 1;
+    min-width: 0; /* Allow button text to wrap if needed */
   }
   .editor-card {
     padding: 17px;
@@ -176,5 +262,131 @@
   }
   .evidence-photo-grid img {
     height: 190px;
+  }
+}
+
+/* Additional mobile fixes for smaller viewports */
+@media (max-width: 430px) {
+  .evidence-editor {
+    padding: 0;
+  }
+  
+  .page-header.evidence-editor-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .evidence-form {
+    padding: 0 16px;
+  }
+  
+  /* Field mode specific fixes */
+  .evidence-editor .field-step-header {
+    padding: 0 16px 14px;
+  }
+  
+  .evidence-editor .field-footer {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  
+  .evidence-editor .field-footer .btn {
+    font-size: 14px;
+    padding: 11px 16px;
+  }
+  
+  /* Fix button text overflow */
+  .btn {
+    white-space: normal; /* Allow text to wrap */
+    text-align: center;
+    word-break: break-word;
+  }
+  
+  /* Ensure buttons don't cause horizontal overflow */
+  .photo-actions {
+    width: 100%;
+  }
+  
+  .photo-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Fix header actions on very small screens */
+  .evidence-editor-actions .btn {
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+  
+  /* Ensure field footer buttons work properly */
+  .field-footer > div:last-child {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .field-footer > div:last-child .btn {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  /* Allow Back button text to fit */
+  .field-footer .btn-secondary {
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+  
+  /* Continue and Submit buttons get more space */
+  .field-footer .btn-primary {
+    flex: 1;
+  }
+  
+  /* Fix long text in review summary */
+  .review-summary {
+    flex-direction: column;
+    text-align: left;
+  }
+  
+  .review-summary p {
+    word-break: break-word;
+  }
+  
+  /* Ensure submit button doesn't overflow */
+  .submit-report {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Extra defensive styles for very small screens (320px) */
+@media (max-width: 375px) {
+  .editor-card-heading h2 {
+    font-size: 16px;
+  }
+  
+  .editor-card-heading p {
+    font-size: 11px;
+  }
+  
+  /* Ensure no element forces horizontal scroll */
+  * {
+    max-width: 100%;
+  }
+  
+  img,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Fix input fields that might overflow */
+  .input,
+  .textarea,
+  .select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Keep Take Photo button visually primary but ensure it fits */
+  .photo-actions .btn:first-of-type {
+    font-weight: 600;
   }
 }
