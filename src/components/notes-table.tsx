@@ -165,7 +165,7 @@ export function NotesTable({
           </span>
         ),
       },
-      {
+      ...(!compact ? [{
         accessorKey: "item_name_snapshot",
         header: "Item description",
         cell: ({ row }) => (
@@ -195,6 +195,7 @@ export function NotesTable({
           </div>
         ),
       },
+      ] : []),
       ...(reports
         ? [
             {
