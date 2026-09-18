@@ -87,8 +87,7 @@ export default function EvidenceReportEditor({
   });
   const current = useRef(draft);
   const cameraInput = useRef<HTMLInputElement>(null);
-  const uploadInput = useRef<HTMLInputElement>(null);
-  const editorTop = useRef<HTMLDivElement>(null);
+    const editorTop = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     current.current = draft;
@@ -191,6 +190,19 @@ export default function EvidenceReportEditor({
       () => {},
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 },
     );
+  }
+
+  
+  async function simulatePhoto() {
+    requestGps();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900">
+      <rect width="100%" height="100%" fill="#f1f5fe"/>
+      <text x="50%" y="50%" font-size="32" font-family="sans-serif" font-weight="bold" fill="#4a6ca5" text-anchor="middle" dominant-baseline="middle">Simulated Camera Capture</text>
+      <text x="50%" y="60%" font-size="20" font-family="sans-serif" fill="#7d8ba1" text-anchor="middle" dominant-baseline="middle">Metadata populated via GPS</text>
+    </svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const file = new File([blob], "simulated-capture.svg", { type: "image/svg+xml" });
+    await receivePhoto(file, "CAMERA_CAPTURE");
   }
 
   async function receivePhoto(
@@ -675,34 +687,14 @@ export default function EvidenceReportEditor({
               void receivePhoto(e.target.files?.[0], "CAMERA_CAPTURE")
             }
           />
-          <input
-            ref={uploadInput}
-            className="sr-only"
-            type="file"
-            accept="image/*"
-            onChange={(e) =>
-              void receivePhoto(e.target.files?.[0], "FILE_UPLOAD")
-            }
-          />
           <div className="photo-actions">
             <button
               className="btn btn-primary"
               type="button"
               disabled={uploading}
-              onClick={() => {
-                requestGps();
-                cameraInput.current?.click();
-              }}
+              onClick={() => void simulatePhoto()}
             >
-              <Camera /> {uploading ? "Storing photo…" : "Take photo"}
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={uploading}
-              onClick={() => uploadInput.current?.click()}
-            >
-              <FileUp /> Upload existing photo
+              <Camera /> {uploading ? "Storing photo…" : "Take photo (Simulated)"}
             </button>
           </div>
           {draft.photos.length ? (
