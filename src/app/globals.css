@@ -1041,15 +1041,15 @@ button {
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .page-header:has(.dashboard-create-btn) {
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 16px !important;
   }
-  .page-header > div {
+  .page-header:has(.dashboard-create-btn) > div {
     text-align: left !important;
   }
-  .page-header .btn {
+  .dashboard-create-btn {
     width: 100% !important;
     justify-content: center !important;
   }

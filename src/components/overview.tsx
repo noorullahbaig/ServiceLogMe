@@ -59,7 +59,7 @@ export function Overview({ data }: { data: WorkspaceData }) {
             A clear view of warehouse evidence and item condition.
           </p>
         </div>
-        <Link href="/service-notes/new" className="btn btn-primary">
+        <Link href="/service-notes/new" className="btn btn-primary dashboard-create-btn">
           <Plus />
           Create Report
         </Link>
