@@ -424,7 +424,7 @@ export function NotesTable({
                   {group.headers.map((header) => (
                     <th
                       key={header.id}
-                      className={header.id === "grand_total" ? "numeric" : ""}
+                      className={header.column.id === "grand_total" ? "numeric" : `cell-${header.column.id}`}
                     >
                       <button
                         className="sort-button"
@@ -460,7 +460,7 @@ export function NotesTable({
                     <td
                       key={cell.id}
                       className={
-                        cell.column.id === "grand_total" ? "numeric" : ""
+                        cell.column.id === "grand_total" ? "numeric" : `cell-${cell.column.id}`
                       }
                     >
                       {flexRender(
