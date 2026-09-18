@@ -1,5 +1,5 @@
 import { assertSameOrigin, requireUser } from "@/server/auth";
-import { cloudflareEnv } from "@/server/cloudflare-runtime";
+import { cloudflareEnv, type ExtendedEnv } from "@/server/cloudflare-runtime";
 
 type EvidenceRow = {
   id: string;
@@ -14,7 +14,7 @@ type EvidenceRow = {
 async function evidence(
   id: string,
   organizationId: string,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   return env.DB.prepare(
     "SELECT p.*, n.status, n.person_in_charge_id FROM report_photo_evidence p JOIN service_notes n ON n.id = p.report_id AND n.organization_id = p.organization_id WHERE p.id = ? AND p.organization_id = ?",

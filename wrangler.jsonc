@@ -26,12 +26,7 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "REPORT_MEDIA",
-      "bucket_name": "servicelogme-evidence-production"
-    }
-  ],
+
   "images": {
     "binding": "IMAGES"
   },
@@ -49,12 +44,7 @@
           "migrations_dir": "migrations"
         }
       ],
-      "r2_buckets": [
-        {
-          "binding": "REPORT_MEDIA",
-          "bucket_name": "servicelogme-evidence-staging"
-        }
-      ],
+
       "images": {
         "binding": "IMAGES"
       },

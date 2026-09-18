@@ -1,5 +1,5 @@
 import { assertSameOrigin, requireUser } from "@/server/auth";
-import { cloudflareEnv } from "@/server/cloudflare-runtime";
+import { cloudflareEnv, type ExtendedEnv } from "@/server/cloudflare-runtime";
 
 const MAX_BYTES = 30_000_000;
 function jsonError(message: string, status: number, code: string) {

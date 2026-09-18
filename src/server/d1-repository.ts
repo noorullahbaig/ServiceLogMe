@@ -1,3 +1,4 @@
+import { type ExtendedEnv } from "./cloudflare-runtime";
 import {
   calculateTotals,
   canAccessNote,
@@ -389,7 +390,7 @@ async function rowsForWorkspace(profile: Profile, db: D1Database) {
 }
 export async function readWorkspace(
   user: AuthenticatedUser,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<WorkspaceData> {
   const profile = await profileForUser(user, env.DB);
   return { profile, ...(await rowsForWorkspace(profile, env.DB)) };
@@ -397,7 +398,7 @@ export async function readWorkspace(
 export async function listReports(
   user: AuthenticatedUser,
   query: ReportQuery,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<ReportPage> {
   const profile = await profileForUser(user, env.DB);
   const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 20));
@@ -465,7 +466,7 @@ export async function listReports(
 }
 export async function createNote(
   user: AuthenticatedUser,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<ServiceNote> {
   const profile = await profileForUser(user, env.DB);
   const timestamp = now(),
@@ -633,7 +634,7 @@ async function replaceChildren(
   note: ServiceNote,
   profile: Profile,
   user: AuthenticatedUser,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   const statements = [
     env.DB.prepare(
@@ -773,7 +774,7 @@ async function replaceChildren(
 
 async function finalizeEvidencePhotos(
   report: ServiceNote,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   const processor = new CloudflareEvidenceImageProcessor(env.IMAGES);
   const rows = await all(
@@ -838,7 +839,7 @@ async function saveEvidenceNote(
   user: AuthenticatedUser,
   input: ServiceNote,
   complete: boolean,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   let { profile, current } = await assertNote(user, input, env.DB);
   if (current.status === "COMPLETED") {
@@ -1075,7 +1076,7 @@ export async function saveNote(
   user: AuthenticatedUser,
   input: ServiceNote,
   complete: boolean,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<ServiceNote> {
   if (input.schema_version === 2)
     return saveEvidenceNote(user, input, complete, env);
@@ -1252,7 +1253,7 @@ export async function saveCustomer(
   input: Omit<Customer, "id" | "organization_id" | "created_at"> & {
     id?: string;
   },
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<Customer> {
   const profile = await profileForUser(user, env.DB);
   if (!input.name.trim())
@@ -1315,7 +1316,7 @@ export async function saveTrackedItem(
     TrackedItem,
     "id" | "organization_id" | "created_at" | "updated_at"
   > & { id?: string },
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ): Promise<TrackedItem> {
   const profile = await profileForUser(user, env.DB);
   const name = input.name.trim(),
@@ -1380,7 +1381,7 @@ export async function saveTrackedItem(
 export async function saveEmployee(
   user: AuthenticatedUser,
   input: Profile,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   const profile = await profileForUser(user, env.DB);
   if (profile.role !== "ADMIN")
@@ -1423,7 +1424,7 @@ export async function saveEmployee(
 export async function saveOrganization(
   user: AuthenticatedUser,
   input: Organization,
-  env: Cloudflare.Env,
+  env: ExtendedEnv,
 ) {
   const profile = await profileForUser(user, env.DB);
   if (profile.role !== "ADMIN")
