@@ -151,7 +151,7 @@
 /* Field mode footer navigation */
 .evidence-editor .field-footer {
   position: sticky;
-  bottom: 0;
+  bottom: 71px;
   z-index: 5;
   background: #fff;
   border-top: 1px solid #e4e8ee;

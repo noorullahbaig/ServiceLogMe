@@ -755,7 +755,8 @@ button {
 .field-main {
   padding: 26px 22px 100px;
 }
-.field-main:has(.field-editor-footer) {
+.field-main:has(.field-editor-footer),
+.field-main:has(.field-footer) {
   padding-bottom: 180px;
 }
 .field-heading {
@@ -1020,7 +1021,8 @@ button {
   .field-main {
     padding: 25px 20px 100px;
   }
-  .field-main:has(.field-editor-footer) {
+  .field-main:has(.field-editor-footer),
+.field-main:has(.field-footer) {
     padding-bottom: 190px;
   }
   .field-body .page-subtitle {

@@ -1416,7 +1416,7 @@ export default function NoteEditor({
             <div className="photo-add-actions">
               <button
                 type="button"
-                className="btn btn-ghost"
+                className={field ? "btn btn-primary" : "btn btn-ghost"}
                 onClick={() => cameraInput.current?.click()}
               >
                 <Camera size={15} />
